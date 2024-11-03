@@ -17,6 +17,15 @@ latest version or any specific commit.
 
 [Go](https://go.dev/) and [git](https://git-scm.com/) should be available.
 
+### Installation
+
+You can install AnyForm directly using curl:
+
+```shell
+curl -L https://github.com/Didainius/anyform/releases/latest/download/anyform -o /usr/local/bin/anyform
+chmod +x /usr/local/bin/anyform
+```
+
 ### Use cases
 
 * Perfect for development and testing purposes
