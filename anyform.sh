@@ -2,10 +2,10 @@
 
 # Function to print usage
 print_usage() {
-    echo "Usage: $0 [--give-configuration] <terraform-provider-name> <git-commit-version>"
+    echo "Usage: $0 [--print-configuration | -p] <repository-address> <git-commit-version>"
     echo "Options:"
-    echo "  --give-configuration  Print the Terraform configuration block"
-    echo "  -h, --help            Show this help message"
+    echo "  --print-configuration, -p  Print the Terraform configuration block"
+    echo "  -h, --help                 Show this help message"
 }
 
 # Check if the correct number of arguments are provided
@@ -20,7 +20,7 @@ PRINT_CONFIG=false
 # Parse arguments
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --give-configuration)
+        --print-configuration|-p)
             PRINT_CONFIG=true
             shift
             ;;
@@ -29,8 +29,8 @@ while [ "$#" -gt 0 ]; do
             exit 0
             ;;
         *)
-            if [ -z "$PROVIDER_NAME" ]; then
-                PROVIDER_NAME=$1
+            if [ -z "$REPO_ADDRESS" ]; then
+                REPO_ADDRESS=$1
             elif [ -z "$COMMIT_VERSION" ]; then
                 COMMIT_VERSION=$1
             else
@@ -43,10 +43,37 @@ while [ "$#" -gt 0 ]; do
 done
 
 # Validate required arguments
-if [ -z "$PROVIDER_NAME" ] || [ -z "$COMMIT_VERSION" ]; then
+if [ -z "$REPO_ADDRESS" ] || [ -z "$COMMIT_VERSION" ]; then
     print_usage
     exit 1
 fi
+
+# Extract provider information and organization from repository address
+GITHUB_PATTERN="https://github.com/([^/]+)/"
+PROVIDER_PATTERN="terraform-provider-([^/]+)"
+
+# Extract organization from GitHub URL
+if [[ $REPO_ADDRESS =~ $GITHUB_PATTERN ]]; then
+    ORGANIZATION="${BASH_REMATCH[1]}"
+else
+    echo "Error: Unable to extract organization from repository address"
+    echo "Repository address must be in format: https://github.com/<organization>/terraform-provider-<name>"
+    exit 1
+fi
+
+# Extract provider information
+if [[ $REPO_ADDRESS =~ $PROVIDER_PATTERN ]]; then
+    PROVIDER_NAME="terraform-provider-${BASH_REMATCH[1]}"
+    PROVIDER_TYPE="${BASH_REMATCH[1]}"
+else
+    echo "Error: Unable to extract provider name from repository address"
+    echo "Repository name must be in format: terraform-provider-<name>"
+    exit 1
+fi
+
+echo "Organization: $ORGANIZATION"
+echo "Provider Name: $PROVIDER_NAME"
+echo "Provider Type: $PROVIDER_TYPE"
 
 # Check if git is installed
 if ! command -v git > /dev/null 2>&1; then
@@ -61,28 +88,28 @@ if ! command -v go > /dev/null 2>&1; then
 fi
 
 # Print the provided arguments
-echo "Terraform Provider Name: $PROVIDER_NAME"
+echo "Repository Address: $REPO_ADDRESS"
 echo "Git Commit Version: $COMMIT_VERSION"
 
-# Create a temporary directory
+# Create and handle temporary directory
 TEMP_DIR="/tmp/${PROVIDER_NAME}-${COMMIT_VERSION}"
 if [ -d "$TEMP_DIR" ]; then
-    echo "Directory $TEMP_DIR already exists. Using existing directory."
+    echo "Directory $TEMP_DIR already exists. Updating repository..."
+    cd $TEMP_DIR
+    git fetch --all --tags
+    if [ $? -ne 0 ]; then
+        echo "Failed to update repository"
+        exit 1
+    fi
 else
     mkdir -p $TEMP_DIR
-fi
-
-# Clone the repository into the temporary directory
-if [ ! -d "$TEMP_DIR/.git" ]; then
-    git clone https://github.com/hashicorp/$PROVIDER_NAME.git $TEMP_DIR
+    git clone $REPO_ADDRESS $TEMP_DIR
     if [ $? -ne 0 ]; then
         echo "Failed to clone repository"
         exit 1
     fi
+    cd $TEMP_DIR
 fi
-
-# Change to the temporary directory
-cd $TEMP_DIR
 
 # Checkout the specific commit
 git checkout $COMMIT_VERSION
@@ -96,7 +123,7 @@ CHECKED_OUT_VERSION=$(git describe --tags)
 echo "Checked out version: $CHECKED_OUT_VERSION"
 
 # Perform go build with verbose flag
-OUTPUT_BINARY="${PROVIDER_NAME}-${CHECKED_OUT_VERSION}-${COMMIT_VERSION}"
+OUTPUT_BINARY="${PROVIDER_NAME}_${CHECKED_OUT_VERSION}"
 go build -v -o $OUTPUT_BINARY
 if [ $? -ne 0 ]; then
     echo "Failed to build"
@@ -106,10 +133,8 @@ fi
 # Determine the local .terraform path based on GOOS and GOARCH in the user's home directory
 GOOS=$(go env GOOS)
 GOARCH=$(go env GOARCH)
-NAMESPACE="hashicorp"
-TYPE=$(echo $PROVIDER_NAME | sed 's/^terraform-provider-//')
 VERSION=$CHECKED_OUT_VERSION
-TERRAFORM_PATH="$HOME/.terraform/plugins/${GOOS}_${GOARCH}/${NAMESPACE}/${TYPE}/${VERSION}"
+TERRAFORM_PATH="$HOME/.terraform/plugins/${GOOS}_${GOARCH}/${ORGANIZATION}/${PROVIDER_TYPE}/${VERSION}"
 
 # Create the directory if it doesn't exist
 mkdir -p $TERRAFORM_PATH
@@ -123,14 +148,14 @@ fi
 
 echo "Build completed successfully. Output binary: $TERRAFORM_PATH/$OUTPUT_BINARY"
 
-# Only print the configuration block if --give-configuration was provided
+# Only print the configuration block if --print-configuration was provided
 if [ "$PRINT_CONFIG" = true ]; then
     echo "To use this provider in your Terraform configuration, add the following block:"
     echo "
 terraform {
   required_providers {
-    $TYPE = {
-      source = \"$NAMESPACE/$TYPE\"
+    $PROVIDER_TYPE = {
+      source = \"$ORGANIZATION/$PROVIDER_TYPE\"
       version = \"$VERSION\"
     }
   }
