@@ -1,6 +1,6 @@
 <div align="center">
     <picture>
-        <img src="images/anyform-logo.svg" width="300">
+        <img src="images/anyform-logo.png" width="250">
     </picture>
     <p><strong>Install any Terraform Provider straight from source - your gateway to custom provider versions!</strong></p>
    
