@@ -1,8 +1,50 @@
 #!/bin/sh
 
+# Function to print usage
+print_usage() {
+    echo "Usage: $0 [--give-configuration] <terraform-provider-name> <git-commit-version>"
+    echo "Options:"
+    echo "  --give-configuration  Print the Terraform configuration block"
+    echo "  -h, --help            Show this help message"
+}
+
 # Check if the correct number of arguments are provided
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <terraform-provider-name> <git-commit-version>"
+if [ "$#" -lt 2 ]; then
+    print_usage
+    exit 1
+fi
+
+# Initialize flag variable
+PRINT_CONFIG=false
+
+# Parse arguments
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --give-configuration)
+            PRINT_CONFIG=true
+            shift
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        *)
+            if [ -z "$PROVIDER_NAME" ]; then
+                PROVIDER_NAME=$1
+            elif [ -z "$COMMIT_VERSION" ]; then
+                COMMIT_VERSION=$1
+            else
+                print_usage
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Validate required arguments
+if [ -z "$PROVIDER_NAME" ] || [ -z "$COMMIT_VERSION" ]; then
+    print_usage
     exit 1
 fi
 
@@ -17,10 +59,6 @@ if ! command -v go > /dev/null 2>&1; then
     echo "Go is not installed. Please install Go and try again."
     exit 1
 fi
-
-# Assign arguments to variables
-PROVIDER_NAME=$1
-COMMIT_VERSION=$2
 
 # Print the provided arguments
 echo "Terraform Provider Name: $PROVIDER_NAME"
@@ -84,3 +122,18 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Build completed successfully. Output binary: $TERRAFORM_PATH/$OUTPUT_BINARY"
+
+# Only print the configuration block if --give-configuration was provided
+if [ "$PRINT_CONFIG" = true ]; then
+    echo "To use this provider in your Terraform configuration, add the following block:"
+    echo "
+terraform {
+  required_providers {
+    $TYPE = {
+      source = \"$NAMESPACE/$TYPE\"
+      version = \"$VERSION\"
+    }
+  }
+}
+"
+fi
