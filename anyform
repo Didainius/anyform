@@ -90,41 +90,48 @@ fi
 
 # Print the provided arguments
 echo "Repository Address: $REPO_ADDRESS"
-echo "Git Commit Version: $COMMIT_VERSION"
+if [ -n "$COMMIT_VERSION" ]; then
+    echo "Git Commit Version: $COMMIT_VERSION"
+fi
 
-# Create and handle temporary directory
-TEMP_DIR="/tmp/${PROVIDER_NAME}-${COMMIT_VERSION}"
-if [ -d "$TEMP_DIR" ]; then
-    echo "Directory $TEMP_DIR already exists. Updating repository..."
-    cd $TEMP_DIR
-    git fetch --all --tags
-    if [ $? -ne 0 ]; then
-        echo "Failed to update repository"
-        exit 1
-    fi
-else
+# Create temporary directory for initial clone
+TEMP_DIR="/tmp/${PROVIDER_NAME}"
+if [ ! -d "$TEMP_DIR" ]; then
     mkdir -p $TEMP_DIR
     git clone $REPO_ADDRESS $TEMP_DIR
     if [ $? -ne 0 ]; then
         echo "Failed to clone repository"
         exit 1
     fi
-    cd $TEMP_DIR
 fi
 
-# Checkout the specific commit or get latest from default branch
+# Change to temp directory and update repository
+cd $TEMP_DIR
+git fetch --all --tags
+if [ $? -ne 0 ]; then
+    echo "Failed to update repository"
+    exit 1
+fi
+
+# Determine commit version early
 if [ -n "$COMMIT_VERSION" ]; then
-    git checkout $COMMIT_VERSION
-    if [ $? -ne 0 ]; then
-        echo "Failed to checkout commit $COMMIT_VERSION"
+    if ! git rev-parse --quiet --verify "$COMMIT_VERSION^{commit}" >/dev/null; then
+        echo "Failed to verify commit $COMMIT_VERSION"
         exit 1
     fi
 else
     echo "No commit version specified, using latest commit from default branch"
-    git checkout $(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-    git pull
-    COMMIT_VERSION=$(git rev-parse HEAD)
+    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+    git fetch origin $DEFAULT_BRANCH
+    COMMIT_VERSION=$(git rev-parse origin/$DEFAULT_BRANCH)
     echo "Using commit: $COMMIT_VERSION"
+fi
+
+# Checkout the determined version
+git checkout $COMMIT_VERSION
+if [ $? -ne 0 ]; then
+    echo "Failed to checkout commit $COMMIT_VERSION"
+    exit 1
 fi
 
 # Emit the version tag that was checked out
