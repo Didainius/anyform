@@ -36,7 +36,7 @@ chmod +x /usr/local/bin/anyform
 ### Usage
 
 ```shell
-Usage: ./anyform.sh [--print-configuration | -p] <repository-address> [git-commit-version]
+Usage: ./anyform [--print-configuration | -p] <repository-address> [git-commit-version]
 Options:
   --print-configuration, -p  Print the Terraform configuration block
   -h, --help                 Show this help message
@@ -46,7 +46,7 @@ Note: If git-commit-version is not specified, the latest commit from default bra
 #### Example
 
 ```shell
-./anyform.sh -p https://github.com/cloudflare/terraform-provider-cloudflare
+./anyform -p https://github.com/cloudflare/terraform-provider-cloudflare
 Organization: cloudflare
 Provider Name: terraform-provider-cloudflare
 Provider Type: cloudflare
