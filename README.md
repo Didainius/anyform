@@ -9,13 +9,12 @@
 
 ## AnyForm - Any Terraform Provider version from source
 
-
 A simple tool that installs any Terraform Provider straight from source. You can choose either the
 latest version or any specific commit.
 
-### Requisites
+### Prerequisites
 
-[Go](https://go.dev/) and [git](https://git-scm.com/) should be available.
+[Go](https://go.dev/) and [git](https://git-scm.com/) must be installed on your system.
 
 ### Installation
 
