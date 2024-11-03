@@ -1,0 +1,5 @@
+# ...existing content...
+# Test related
+*.tmp
+test/
+.bats/

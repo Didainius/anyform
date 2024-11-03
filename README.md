@@ -78,6 +78,34 @@ terraform {
 }
 ```
 
+### Testing
+
+Tests are written using [Bats](https://github.com/bats-core/bats-core) (Bash Automated Testing System). To run the tests:
+
+1. Install Bats:
+   ```shell
+   # On macOS
+   brew install bats-core
+
+   # On Ubuntu/Debian
+   apt-get install bats
+
+   # Using npm
+   npm install -g bats
+   ```
+
+2. Make the test file executable:
+   ```shell
+   chmod +x anyform.bats
+   ```
+
+3. Run the tests:
+   ```shell
+   bats anyform.bats
+   ```
+
+The test suite covers basic functionality, error handling, and various input scenarios.
+
 ### License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
