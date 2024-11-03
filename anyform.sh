@@ -2,14 +2,15 @@
 
 # Function to print usage
 print_usage() {
-    echo "Usage: $0 [--print-configuration | -p] <repository-address> <git-commit-version>"
+    echo "Usage: $0 [--print-configuration | -p] <repository-address> [git-commit-version]"
     echo "Options:"
     echo "  --print-configuration, -p  Print the Terraform configuration block"
     echo "  -h, --help                 Show this help message"
+    echo "Note: If git-commit-version is not specified, the latest commit from default branch will be used"
 }
 
 # Check if the correct number of arguments are provided
-if [ "$#" -lt 2 ]; then
+if [ "$#" -lt 1 ]; then
     print_usage
     exit 1
 fi
@@ -43,7 +44,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 # Validate required arguments
-if [ -z "$REPO_ADDRESS" ] || [ -z "$COMMIT_VERSION" ]; then
+if [ -z "$REPO_ADDRESS" ]; then
     print_usage
     exit 1
 fi
@@ -111,11 +112,19 @@ else
     cd $TEMP_DIR
 fi
 
-# Checkout the specific commit
-git checkout $COMMIT_VERSION
-if [ $? -ne 0 ]; then
-    echo "Failed to checkout commit $COMMIT_VERSION"
-    exit 1
+# Checkout the specific commit or get latest from default branch
+if [ -n "$COMMIT_VERSION" ]; then
+    git checkout $COMMIT_VERSION
+    if [ $? -ne 0 ]; then
+        echo "Failed to checkout commit $COMMIT_VERSION"
+        exit 1
+    fi
+else
+    echo "No commit version specified, using latest commit from default branch"
+    git checkout $(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+    git pull
+    COMMIT_VERSION=$(git rev-parse HEAD)
+    echo "Using commit: $COMMIT_VERSION"
 fi
 
 # Emit the version tag that was checked out
