@@ -46,36 +46,18 @@ Note: If git-commit-version is not specified, the latest commit from default bra
 #### Example
 
 ```shell
-./anyform -p https://github.com/cloudflare/terraform-provider-cloudflare
-Organization: cloudflare
-Provider Name: terraform-provider-cloudflare
-Provider Type: cloudflare
-Repository Address: https://github.com/cloudflare/terraform-provider-cloudflare
-Git Commit Version:
-Cloning into '/tmp/terraform-provider-cloudflare-'...
-remote: Enumerating objects: 93162, done.
-remote: Counting objects: 100% (570/570), done.
-remote: Compressing objects: 100% (250/250), done.
-remote: Total 93162 (delta 356), reused 523 (delta 318), pack-reused 92592 (from 1)
-Receiving objects: 100% (93162/93162), 58.04 MiB | 14.33 MiB/s, done.
-Resolving deltas: 100% (68216/68216), done.
+$ anyform  https://github.com/hashicorp/terraform-provider-google
+Organization: hashicorp
+Provider Name: terraform-provider-google
+Provider Type: google
+Repository Address: https://github.com/hashicorp/terraform-provider-google
 No commit version specified, using latest commit from default branch
-Already on 'master'
-Your branch is up to date with 'origin/master'.
-Already up to date.
-Using commit: 86cd8749ed6948889800a691dc7d038868c36a7c
-Checked out version: v4.45.0-14-g86cd8749e
-Build completed successfully. Output binary: /Users/user/.terraform/plugins/darwin_arm64/cloudflare/cloudflare/v4.45.0-14-g86cd8749e/terraform-provider-cloudflare_v4.45.0-14-g86cd8749e
-To use this provider in your Terraform configuration, add the following block:
-
-terraform {
-  required_providers {
-    cloudflare = {
-      source = "cloudflare/cloudflare"
-      version = "v4.45.0-14-g86cd8749e"
-    }
-  }
-}
+From https://github.com/hashicorp/terraform-provider-google
+ * branch                main       -> FETCH_HEAD
+Using commit: ca051856a75ed90d44920a111a25c5078d7fe8e8
+HEAD is now at ca051856a Magician vcr eap cmd (#12024) (#20168)
+Checked out version: v5.29.0-1239-gca051856a
+Build completed successfully. Output binary: /Users/dainius/.terraform/plugins/darwin_arm64/hashicorp/google/v5.29.0-1239-gca051856a/terraform-provider-google_v5.29.0-1239-gca051856a
 ```
 
 ### Testing
