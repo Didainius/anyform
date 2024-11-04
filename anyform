@@ -140,17 +140,18 @@ echo "Checked out version: $CHECKED_OUT_VERSION"
 
 # Perform go build with verbose flag
 OUTPUT_BINARY="${PROVIDER_NAME}_${CHECKED_OUT_VERSION}"
-go build -v -o $OUTPUT_BINARY
+go build -o $OUTPUT_BINARY
 if [ $? -ne 0 ]; then
     echo "Failed to build"
     exit 1
 fi
 
-# Determine the local .terraform path based on GOOS and GOARCH in the user's home directory
+# Determine the local .terraform.d path based on GOOS and GOARCH in the user's home directory
 GOOS=$(go env GOOS)
 GOARCH=$(go env GOARCH)
 VERSION=$CHECKED_OUT_VERSION
-TERRAFORM_PATH="$HOME/.terraform/plugins/${GOOS}_${GOARCH}/${ORGANIZATION}/${PROVIDER_TYPE}/${VERSION}"
+VERSION_NO_PREFIX=$(echo "$VERSION" | sed 's/^v//')
+TERRAFORM_PATH="$HOME/.terraform.d/plugins/registry.terraform.io/${ORGANIZATION}/${PROVIDER_TYPE}/${VERSION_NO_PREFIX}/${GOOS}_${GOARCH}"
 
 # Create the directory if it doesn't exist
 mkdir -p $TERRAFORM_PATH
@@ -166,13 +167,15 @@ echo "Build completed successfully. Output binary: $TERRAFORM_PATH/$OUTPUT_BINAR
 
 # Only print the configuration block if --print-configuration was provided
 if [ "$PRINT_CONFIG" = true ]; then
+    # Remove 'v' prefix from version if it exists
+    VERSION_NO_PREFIX=$(echo "$VERSION" | sed 's/^v//')
     echo "To use this provider in your Terraform configuration, add the following block:"
     echo "
 terraform {
   required_providers {
     $PROVIDER_TYPE = {
       source = \"$ORGANIZATION/$PROVIDER_TYPE\"
-      version = \"$VERSION\"
+      version = \"$VERSION_NO_PREFIX\"
     }
   }
 }
