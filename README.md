@@ -35,9 +35,10 @@ chmod +x /usr/local/bin/anyform
 ### Usage
 
 ```shell
-Usage: ./anyform [--print-configuration | -p] <repository-address> [git-commit-version] [version]
+Usage: ./anyform [--print-configuration | -p] [--version] <repository-address> [git-commit-version]
 Options:
   --print-configuration, -p  Print the Terraform configuration block
+  --version                  Print version information
   -h, --help                 Show this help message
 Note: If git-commit-version is not specified, the latest commit from default branch will be used
 ```
@@ -45,23 +46,20 @@ Note: If git-commit-version is not specified, the latest commit from default bra
 #### Example
 
 ```shell
-anyform -p https://github.com/cloudflare/terraform-provider-cloudflare
+anyform -p https://github.com/cloudflare/terraform-provider-cloudflare 24354ad
 Organization: cloudflare
 Provider Name: terraform-provider-cloudflare
 Provider Type: cloudflare
 Repository Address: https://github.com/cloudflare/terraform-provider-cloudflare
+Git Commit Version: 24354ad
 Cloning into '/tmp/terraform-provider-cloudflare'...
-remote: Enumerating objects: 93219, done.
-remote: Counting objects: 100% (655/655), done.
-remote: Compressing objects: 100% (240/240), done.
-remote: Total 93219 (delta 435), reused 618 (delta 413), pack-reused 92564 (from 1)
-Receiving objects: 100% (93219/93219), 58.05 MiB | 21.21 MiB/s, done.
-Resolving deltas: 100% (68267/68267), done.
-No commit version specified, using latest commit from default branch
-From https://github.com/cloudflare/terraform-provider-cloudflare
- * branch                master     -> FETCH_HEAD
-Using commit: 86cd8749ed6948889800a691dc7d038868c36a7c
-Note: switching to '86cd8749ed6948889800a691dc7d038868c36a7c'.
+remote: Enumerating objects: 93310, done.
+remote: Counting objects: 100% (746/746), done.
+remote: Compressing objects: 100% (274/274), done.
+remote: Total 93310 (delta 500), reused 687 (delta 470), pack-reused 92564 (from 1)
+Receiving objects: 100% (93310/93310), 58.10 MiB | 11.98 MiB/s, done.
+Resolving deltas: 100% (68332/68332), done.
+Note: switching to '24354ad'.
 
 You are in 'detached HEAD' state. You can look around, make experimental
 changes and commit them, and you can discard any commits you make in this
@@ -78,16 +76,16 @@ Or undo this operation with:
 
 Turn off this advice by setting config variable advice.detachedHead to false
 
-HEAD is now at 86cd8749e get rid of cache
-Checked out version: v4.45.0-14-g86cd8749e
-Build completed successfully. Output binary: /Users/user/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.45.0-14-g86cd8749e/darwin_arm64/terraform-provider-cloudflare_v4.45.0-14-g86cd8749e
+HEAD is now at 24354ad1e allow 120m to run the tests
+Checked out version: v4.45.0-13-g24354ad1e
+Build completed successfully. Output binary: /Users/user/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.45.0-13-g24354ad1e/darwin_arm64/terraform-provider-cloudflare_v4.45.0-13-g24354ad1e
 To use this provider in your Terraform configuration, add the following block:
 
 terraform {
   required_providers {
     cloudflare = {
       source = "cloudflare/cloudflare"
-      version = "4.45.0-14-g86cd8749e"
+      version = "4.45.0-13-g24354ad1e"
     }
   }
 }
