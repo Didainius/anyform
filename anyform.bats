@@ -181,33 +181,15 @@ mock_go_build() {
 }
 
 @test "handles missing git command" {
-    # Save original PATH
+    # Save original PATH and create empty PATH
     ORIGINAL_PATH="$PATH"
-    
-    # Create a temporary directory for PATH manipulation
-    TEMP_PATH_DIR="$(mktemp -d)"
-    
-    # Create a fake PATH that excludes git but keeps other essential commands
-    mkdir -p "$TEMP_PATH_DIR/bin"
-    for cmd in $(echo "$ORIGINAL_PATH" | tr ':' '\n' | grep -v "git"); do
-        if [ -d "$cmd" ]; then
-            for file in "$cmd"/*; do
-                if [ -x "$file" ] && [ ! "$(basename "$file")" = "git" ]; then
-                    ln -sf "$file" "$TEMP_PATH_DIR/bin/"
-                fi
-            done
-        fi
-    done
-    
-    # Set the new PATH without git
-    export PATH="$TEMP_PATH_DIR/bin"
+    export PATH=""
     
     # Run the test
     run "$SCRIPT_PATH" "${MOCK_REPO}"
     
     # Restore original PATH
     export PATH="$ORIGINAL_PATH"
-    rm -rf "$TEMP_PATH_DIR"
     
     # Assert
     [ "$status" -eq 1 ]
@@ -217,31 +199,14 @@ mock_go_build() {
 @test "handles missing go command" {
     # Save original PATH
     ORIGINAL_PATH="$PATH"
-    
-    # Create a temporary directory for PATH manipulation
-    TEMP_PATH_DIR="$(mktemp -d)"
-    
-    # Create a fake PATH that excludes go but keeps other essential commands
-    mkdir -p "$TEMP_PATH_DIR/bin"
-    for cmd in $(echo "$ORIGINAL_PATH" | tr ':' '\n' | grep -v "go"); do
-        if [ -d "$cmd" ]; then
-            for file in "$cmd"/*; do
-                if [ -x "$file" ] && [ ! "$(basename "$file")" = "go" ]; then
-                    ln -sf "$file" "$TEMP_PATH_DIR/bin/"
-                fi
-            done
-        fi
-    done
-    
-    # Set the new PATH without go
-    export PATH="$TEMP_PATH_DIR/bin"
+    # Create PATH with only git (using mock)
+    export PATH="${MOCK_BIN_DIR}/git"
     
     # Run the test
     run "$SCRIPT_PATH" "${MOCK_REPO}"
     
     # Restore original PATH
     export PATH="$ORIGINAL_PATH"
-    rm -rf "$TEMP_PATH_DIR"
     
     # Assert
     [ "$status" -eq 1 ]
