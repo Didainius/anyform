@@ -1,10 +1,14 @@
 #!/usr/bin/env sh
 
+# Version
+VERSION="v0.3.0"
+
 # Function to print usage
 print_usage() {
-    echo "Usage: $0 [--print-configuration | -p] <repository-address> [git-commit-version]"
+    echo "Usage: $0 [--print-configuration | -p] [--version] <repository-address> [git-commit-version]"
     echo "Options:"
     echo "  --print-configuration, -p  Print the Terraform configuration block"
+    echo "  --version                  Print version information"
     echo "  -h, --help                 Show this help message"
     echo "Note: If git-commit-version is not specified, the latest commit from default branch will be used"
 }
@@ -24,6 +28,10 @@ while [ "$#" -gt 0 ]; do
         --print-configuration|-p)
             PRINT_CONFIG=true
             shift
+            ;;
+        --version)
+            echo "AnyForm version $VERSION"
+            exit 0
             ;;
         -h|--help)
             print_usage

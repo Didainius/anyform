@@ -135,6 +135,12 @@ mock_go_build() {
     [[ "${lines[0]}" =~ "Usage:" ]]
 }
 
+@test "prints version with --version flag" {
+    run "$SCRIPT_PATH" --version
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "AnyForm version v0.3.0" ]]
+}
+
 @test "validates repository address format" {
     run "$SCRIPT_PATH" "invalid-repo-address"
     [ "$status" -eq 1 ]

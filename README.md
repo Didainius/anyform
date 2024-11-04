@@ -35,7 +35,7 @@ chmod +x /usr/local/bin/anyform
 ### Usage
 
 ```shell
-Usage: ./anyform [--print-configuration | -p] <repository-address> [git-commit-version]
+Usage: ./anyform [--print-configuration | -p] <repository-address> [git-commit-version] [version]
 Options:
   --print-configuration, -p  Print the Terraform configuration block
   -h, --help                 Show this help message
