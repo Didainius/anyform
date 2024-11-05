@@ -35,12 +35,12 @@ chmod +x /usr/local/bin/anyform
 ### Usage
 
 ```shell
-Usage: ./anyform [--print-configuration | -p] [--version] <repository-address> [git-commit-version]
+Usage: ./anyform [--print-configuration | -p] [--version] <repository-address> [git-commit-version | pr-url]
 Options:
   --print-configuration, -p  Print the Terraform configuration block
   --version                  Print version information
   -h, --help                 Show this help message
-Note: If git-commit-version is not specified, the latest commit from default branch will be used
+Note: If git-commit-version or pr-url is not specified, the latest commit from default branch will be used
 ```
 
 #### Example
@@ -86,6 +86,46 @@ terraform {
     cloudflare = {
       source = "cloudflare/cloudflare"
       version = "4.45.0-13-g24354ad1e"
+    }
+  }
+}
+```
+
+#### Example with PR URL
+
+```shell
+anyform -p https://github.com/cloudflare/terraform-provider-cloudflare/pull/1234
+Organization: cloudflare
+Provider Name: terraform-provider-cloudflare
+Provider Type: cloudflare
+Repository Address: https://github.com/cloudflare/terraform-provider-cloudflare/pull/1234
+remote: Enumerating objects: 208, done.
+remote: Counting objects: 100% (208/208), done.
+remote: Compressing objects: 100% (82/82), done.
+remote: Total 208 (delta 133), reused 194 (delta 126), pack-reused 0 (from 0)
+Receiving objects: 100% (208/208), 98.87 KiB | 1.32 MiB/s, done.
+Resolving deltas: 100% (133/133), completed with 16 local objects.
+From https://github.com/cloudflare/terraform-provider-cloudflare
+   ccf939d9b..f23491fac  generated                 -> origin/generated
+   3b815e54d..15c351bc8  generated--merge-conflict -> origin/generated--merge-conflict
+   86cd8749e..12773e4c6  master                    -> origin/master
+   ec2df4ce1..28b576d7e  next                      -> origin/next
+ + 42431f454...fbdf6df4f next--merge-conflict      -> origin/next--merge-conflict  (forced update)
+No commit version specified, using latest commit from default branch
+From https://github.com/cloudflare/terraform-provider-cloudflare
+ * branch                master     -> FETCH_HEAD
+Using commit: 12773e4c67b878455273f13822e197b684a30e3b
+Previous HEAD position was 24354ad1e allow 120m to run the tests
+HEAD is now at 12773e4c6 Merge pull request #4509 from daviscloudflare/davis/add-wr-languages
+Checked out version: v4.45.0-20-g12773e4c6
+Build completed successfully. Output binary: /Users/user/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.45.0-20-g12773e4c6/darwin_arm64/terraform-provider-cloudflare_v4.45.0-20-g12773e4c6
+To use this provider in your Terraform configuration, add the following block:
+
+terraform {
+  required_providers {
+    cloudflare = {
+      source = "cloudflare/cloudflare"
+      version = "4.45.0-20-g12773e4c6"
     }
   }
 }

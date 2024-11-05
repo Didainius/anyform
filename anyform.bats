@@ -183,3 +183,17 @@ mock_go_build() {
     [ "$status" -eq 0 ]
     [[ "${output}" =~ "Checked out version: ${TAGGED_VERSION}" ]]
 }
+
+@test "handles pull request URL" {
+    run "$SCRIPT_PATH" "https://github.com/hashicorp/terraform-provider-corner/pull/123"
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Fetching Pull Request #123" ]]
+    [[ "${output}" =~ "Organization: hashicorp" ]]
+    [[ "${output}" =~ "Provider Type: corner" ]]
+}
+
+@test "fails gracefully with invalid PR URL" {
+    run "$SCRIPT_PATH" "https://github.com/hashicorp/terraform-provider-corner/pull/abc"
+    [ "$status" -eq 1 ]
+    [[ "${output}" =~ "Error: Unable to extract organization from repository address" ]]
+}

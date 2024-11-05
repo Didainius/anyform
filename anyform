@@ -10,7 +10,10 @@ print_usage() {
     echo "  --print-configuration, -p  Print the Terraform configuration block"
     echo "  --version                  Print version information"
     echo "  -h, --help                 Show this help message"
-    echo "Note: If git-commit-version is not specified, the latest commit from default branch will be used"
+    echo "Note: Repository address can be:"
+    echo "  - Repository URL: https://github.com/<organization>/terraform-provider-<name>"
+    echo "  - Pull Request URL: https://github.com/<organization>/terraform-provider-<name>/pull/<number>"
+    echo "If git-commit-version is not specified, the latest commit from default branch or PR will be used"
 }
 
 # Check if the correct number of arguments are provided
@@ -60,6 +63,17 @@ fi
 # Extract provider information and organization from repository address
 GITHUB_PATTERN="https://github.com/([^/]+)/"
 PROVIDER_PATTERN="terraform-provider-([^/]+)"
+PR_PATTERN="https://github.com/[^/]+/[^/]+/pull/([0-9]+)"
+
+# Check if it's a PR URL
+IS_PR=false
+PR_NUMBER=""
+if [[ $REPO_ADDRESS =~ $PR_PATTERN ]]; then
+    IS_PR=true
+    PR_NUMBER="${BASH_REMATCH[1]}"
+    # Convert PR URL to repository URL
+    REPO_ADDRESS=$(echo $REPO_ADDRESS | sed 's/\/pull\/[0-9]\+//')
+fi
 
 # Extract organization from GitHub URL
 if [[ $REPO_ADDRESS =~ $GITHUB_PATTERN ]]; then
@@ -116,9 +130,18 @@ fi
 # Change to temp directory and update repository
 cd $TEMP_DIR
 git fetch --all --tags
-if [ $? -ne 0 ]; then
-    echo "Failed to update repository"
-    exit 1
+
+if [ "$IS_PR" = true ]; then
+    echo "Fetching Pull Request #$PR_NUMBER"
+    git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER"
+    if [ $? -ne 0 ]; then
+        echo "Failed to fetch PR #$PR_NUMBER"
+        exit 1
+    fi
+    # If no specific commit version provided, use the PR branch
+    if [ -z "$COMMIT_VERSION" ]; then
+        COMMIT_VERSION="pr-$PR_NUMBER"
+    fi
 fi
 
 # Determine commit version early
