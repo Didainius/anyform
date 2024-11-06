@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '>=1.20.0'
+
+    - name: Install Bats (Ubuntu)
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y bats
+
+    - name: Install Bats (macOS)
+      if: runner.os == 'macOS'
+      run: brew install bats-core
+
+    - name: Make test file executable
+      run: chmod +x anyform.bats
+
+    - name: Run Bats tests
+      run: bats anyform.bats
