@@ -197,3 +197,54 @@ mock_go_build() {
     [ "$status" -eq 1 ]
     [[ "${output}" =~ "Error: Unable to extract organization from repository address" ]]
 }
+
+@test "checks self-update with current version" {
+    # Mock curl to return current version
+    function curl() {
+        echo '{"tag_name": "v0.3.0"}'
+    }
+    export -f curl
+    
+    run "$SCRIPT_PATH" --self-update
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Already running the latest version" ]]
+}
+
+@test "attempts self-update with newer version" {
+    # Mock curl for version check and download
+    function curl() {
+        if [[ "$*" =~ "api.github.com" ]]; then
+            echo '{"tag_name": "v0.3.1"}'
+        else
+            return 0
+        fi
+    }
+    export -f curl
+    
+    run "$SCRIPT_PATH" --self-update
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Successfully updated to v0.3.1" ]]
+}
+
+@test "check for updates when on latest version" {
+    function curl() {
+        echo '{"tag_name": "v0.4.0"}'
+    }
+    export -f curl
+    
+    run "$SCRIPT_PATH" --check-update
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "You are running the latest version" ]]
+}
+
+@test "check for updates when update available" {
+    function curl() {
+        echo '{"tag_name": "v0.5.0"}'
+    }
+    export -f curl
+    
+    run "$SCRIPT_PATH" --check-update
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Update available: v0.4.0 -> v0.5.0" ]]
+    [[ "${output}" =~ "Run 'anyform --self-update' to update" ]]
+}
