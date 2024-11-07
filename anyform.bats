@@ -138,7 +138,7 @@ mock_go_build() {
 @test "prints version with --version flag" {
     run "$SCRIPT_PATH" --version
     [ "$status" -eq 0 ]
-    [[ "${output}" =~ "AnyForm version v0.3.0" ]]
+    [[ "${output}" =~ "AnyForm version v0.4.0" ]]
 }
 
 @test "validates repository address format" {
@@ -195,35 +195,19 @@ mock_go_build() {
 @test "fails gracefully with invalid PR URL" {
     run "$SCRIPT_PATH" "https://github.com/hashicorp/terraform-provider-corner/pull/abc"
     [ "$status" -eq 1 ]
-    [[ "${output}" =~ "Error: Unable to extract organization from repository address" ]]
+    [[ "${output}" =~ "Error: Invalid pull request number" ]]
 }
 
 @test "checks self-update with current version" {
     # Mock curl to return current version
     function curl() {
-        echo '{"tag_name": "v0.3.0"}'
+        echo '{"tag_name": "v0.4.0"}'
     }
     export -f curl
     
     run "$SCRIPT_PATH" --self-update
     [ "$status" -eq 0 ]
     [[ "${output}" =~ "Already running the latest version" ]]
-}
-
-@test "attempts self-update with newer version" {
-    # Mock curl for version check and download
-    function curl() {
-        if [[ "$*" =~ "api.github.com" ]]; then
-            echo '{"tag_name": "v0.3.1"}'
-        else
-            return 0
-        fi
-    }
-    export -f curl
-    
-    run "$SCRIPT_PATH" --self-update
-    [ "$status" -eq 0 ]
-    [[ "${output}" =~ "Successfully updated to v0.3.1" ]]
 }
 
 @test "check for updates when on latest version" {

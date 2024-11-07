@@ -173,7 +173,7 @@ fi
 # Extract provider information and organization from repository address
 GITHUB_PATTERN="https://github.com/([^/]+)/"
 PROVIDER_PATTERN="terraform-provider-([^/]+)"
-PR_PATTERN="https://github.com/[^/]+/[^/]+/pull/([0-9]+)"
+PR_PATTERN="https://github.com/[^/]+/[^/]+/pull/([^/]+)"  # Changed pattern to match any non-slash characters
 
 # Check if it's a PR URL
 IS_PR=false
@@ -181,8 +181,14 @@ PR_NUMBER=""
 if [[ $REPO_ADDRESS =~ $PR_PATTERN ]]; then
     IS_PR=true
     PR_NUMBER="${BASH_REMATCH[1]}"
+    # Validate PR number is numeric and positive
+    if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+        echo "Error: Invalid pull request number: $PR_NUMBER"
+        echo "Pull request number must be a positive integer"
+        exit 1
+    fi
     # Convert PR URL to repository URL
-    REPO_ADDRESS=$(echo $REPO_ADDRESS | sed 's/\/pull\/[0-9]\+//')
+    REPO_ADDRESS=$(echo $REPO_ADDRESS | sed "s/\/pull\/${PR_NUMBER}//")  # Updated to use the actual PR_NUMBER
 fi
 
 # Extract organization from GitHub URL
