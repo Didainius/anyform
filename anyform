@@ -331,7 +331,11 @@ else
 fi
 
 # Checkout the determined version
-git checkout $COMMIT_VERSION
+if [ "$SILENT" = true ]; then
+    git checkout $COMMIT_VERSION >/dev/null 2>&1
+else
+    git checkout $COMMIT_VERSION
+fi
 if [ $? -ne 0 ]; then
     echo "Failed to checkout commit $COMMIT_VERSION"
     exit 1
@@ -372,7 +376,9 @@ print_message "Build completed successfully. Output binary: $TERRAFORM_PATH/$OUT
 if [ "$PRINT_CONFIG" = true ]; then
     # Remove 'v' prefix from version if it exists
     VERSION_NO_PREFIX=$(echo "$VERSION" | sed 's/^v//')
-    echo "To use this provider in your Terraform configuration, add the following block:"
+    if [ "$SILENT" = false ]; then
+        echo "To use this provider in your Terraform configuration, add the following block:"
+    fi
     echo "
 terraform {
   required_providers {
