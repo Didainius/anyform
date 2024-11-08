@@ -93,6 +93,11 @@ teardown() {
     rm -rf "/tmp/terraform-provider-corner"
 }
 
+# Function to extract version from the script
+get_version() {
+    grep '^VERSION=' "$SCRIPT_PATH" | cut -d '"' -f 2
+}
+
 # Mock functions to override external commands
 mock_git() {
     case "$1" in
@@ -136,9 +141,11 @@ mock_go_build() {
 }
 
 @test "prints version with --version flag" {
+    VERSION=$(get_version)
     run "$SCRIPT_PATH" --version
+    echo "output: $output, version: $VERSION"  # Debug output
     [ "$status" -eq 0 ]
-    [[ "${output}" =~ "AnyForm version v0.5.0" ]]
+    echo "$output" | grep -q "AnyForm version ${VERSION}"
 }
 
 @test "validates repository address format" {
@@ -199,36 +206,43 @@ mock_go_build() {
 }
 
 @test "checks self-update with current version" {
+    VERSION=$(get_version)
     # Mock curl to return current version
     function curl() {
-        echo '{"tag_name": "v0.5.0"}'
+        echo "{\"tag_name\": \"$VERSION\"}"
     }
     export -f curl
     
     run "$SCRIPT_PATH" --self-update
+    echo "output: $output"  # Debug output
     [ "$status" -eq 0 ]
-    [[ "${output}" =~ "Already running the latest version" ]]
+    echo "$output" | grep -q "Already running the latest version"
 }
 
 @test "check for updates when on latest version" {
+    VERSION=$(get_version)
     function curl() {
-        echo '{"tag_name": "v0.5.0"}'
+        echo "{\"tag_name\": \"$VERSION\"}"
     }
     export -f curl
     
     run "$SCRIPT_PATH" --check-update
+    echo "output: $output"  # Debug output
     [ "$status" -eq 0 ]
-    [[ "${output}" =~ "You are running the latest version" ]]
+    echo "$output" | grep -q "You are running the latest version"
 }
 
 @test "check for updates when update available" {
+    VERSION=$(get_version)
+    NEW_VERSION="v$(echo $VERSION | awk -F. '{print $1"."$2"."$3+1}')"
     function curl() {
-        echo '{"tag_name": "v0.6.0"}'
+        echo "{\"tag_name\": \"$NEW_VERSION\"}"
     }
     export -f curl
     
     run "$SCRIPT_PATH" --check-update
+    echo "output: $output"  # Debug output
     [ "$status" -eq 0 ]
-    [[ "${output}" =~ "Update available: v0.5.0 -> v0.6.0" ]]
-    [[ "${output}" =~ "Run 'anyform --self-update' to update" ]]
+    echo "$output" | grep -q "Update available: $VERSION -> $NEW_VERSION"
+    echo "$output" | grep -q "Run 'anyform --self-update' to update"
 }

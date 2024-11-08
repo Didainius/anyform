@@ -40,6 +40,8 @@ compare_versions() {
     v1_patch=$(echo "$v1_patch" | sed 's/[^0-9].*//')
     v2_patch=$(echo "$v2_patch" | sed 's/[^0-9].*//')
     
+    echo "Comparing versions: $v1_major.$v1_minor.$v1_patch vs $v2_major.$v2_minor.$v2_patch"  # Debug output
+    
     if [ "$v1_major" -gt "$v2_major" ]; then
         echo 1
     elif [ "$v1_major" -lt "$v2_major" ]; then
