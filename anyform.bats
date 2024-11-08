@@ -138,7 +138,7 @@ mock_go_build() {
 @test "prints version with --version flag" {
     run "$SCRIPT_PATH" --version
     [ "$status" -eq 0 ]
-    [[ "${output}" =~ "AnyForm version v0.4.0" ]]
+    [[ "${output}" =~ "AnyForm version v0.5.0" ]]
 }
 
 @test "validates repository address format" {
@@ -201,7 +201,7 @@ mock_go_build() {
 @test "checks self-update with current version" {
     # Mock curl to return current version
     function curl() {
-        echo '{"tag_name": "v0.4.0"}'
+        echo '{"tag_name": "v0.5.0"}'
     }
     export -f curl
     
@@ -212,7 +212,7 @@ mock_go_build() {
 
 @test "check for updates when on latest version" {
     function curl() {
-        echo '{"tag_name": "v0.4.0"}'
+        echo '{"tag_name": "v0.5.0"}'
     }
     export -f curl
     
@@ -223,12 +223,12 @@ mock_go_build() {
 
 @test "check for updates when update available" {
     function curl() {
-        echo '{"tag_name": "v0.5.0"}'
+        echo '{"tag_name": "v0.6.0"}'
     }
     export -f curl
     
     run "$SCRIPT_PATH" --check-update
     [ "$status" -eq 0 ]
-    [[ "${output}" =~ "Update available: v0.4.0 -> v0.5.0" ]]
+    [[ "${output}" =~ "Update available: v0.5.0 -> v0.6.0" ]]
     [[ "${output}" =~ "Run 'anyform --self-update' to update" ]]
 }
