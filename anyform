@@ -15,7 +15,7 @@ check_latest_version() {
     fi
     
     LATEST_VERSION=$(curl -s https://api.github.com/repos/Didainius/anyform/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$LATEST_VERSION" ]; then
+    if [ -z "$LATEST_VERSION" ] || ! [[ "$LATEST_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         echo "Failed to fetch latest version information"
         exit 1
     fi
