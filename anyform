@@ -3,6 +3,10 @@
 # Version
 VERSION="v0.4.0"
 
+# Initialize flag variables
+PRINT_CONFIG=false
+SILENT=false
+
 # Function to check for latest version
 check_latest_version() {
     if ! command -v curl > /dev/null 2>&1; then
@@ -105,12 +109,13 @@ check_update() {
 
 # Function to print usage
 print_usage() {
-    echo "Usage: $0 [--print-configuration | -p] [--version] [--self-update | -U] [--check-update] <repository-address> [git-commit-version]"
+    echo "Usage: $0 [--print-configuration | -p] [--version] [--self-update | -U] [--check-update] [--silent | -s] <repository-address> [git-commit-version]"
     echo "Options:"
     echo "  --print-configuration, -p  Print the Terraform configuration block"
     echo "  --version                  Print version information"
     echo "  --self-update, -U          Update anyform to the latest version"
     echo "  --check-update             Check if a new version is available"
+    echo "  --silent, -s               Run in silent mode (no output except errors)"
     echo "  -h, --help                 Show this help message"
     echo "Note: Repository address can be:"
     echo "  - Repository URL: https://github.com/<organization>/terraform-provider-<name>"
@@ -118,14 +123,18 @@ print_usage() {
     echo "If git-commit-version is not specified, the latest commit from default branch or PR will be used"
 }
 
+# Function to print messages unless in silent mode
+print_message() {
+    if [ "$SILENT" = false ]; then
+        echo "$1"
+    fi
+}
+
 # Check if the correct number of arguments are provided
 if [ "$#" -lt 1 ]; then
     print_usage
     exit 1
 fi
-
-# Initialize flag variable
-PRINT_CONFIG=false
 
 # Parse arguments
 while [ "$#" -gt 0 ]; do
@@ -145,6 +154,10 @@ while [ "$#" -gt 0 ]; do
         --check-update)
             check_update
             exit 0
+            ;;
+        --silent|-s)
+            SILENT=true
+            shift
             ;;
         -h|--help)
             print_usage
@@ -210,9 +223,9 @@ else
     exit 1
 fi
 
-echo "Organization: $ORGANIZATION"
-echo "Provider Name: $PROVIDER_NAME"
-echo "Provider Type: $PROVIDER_TYPE"
+print_message "Organization: $ORGANIZATION"
+print_message "Provider Name: $PROVIDER_NAME"
+print_message "Provider Type: $PROVIDER_TYPE"
 
 # Check if git is installed
 if ! command -v git > /dev/null 2>&1; then
@@ -227,9 +240,9 @@ if ! command -v go > /dev/null 2>&1; then
 fi
 
 # Print the provided arguments
-echo "Repository Address: $REPO_ADDRESS"
+print_message "Repository Address: $REPO_ADDRESS"
 if [ -n "$COMMIT_VERSION" ]; then
-    echo "Git Commit Version: $COMMIT_VERSION"
+    print_message "Git Commit Version: $COMMIT_VERSION"
 fi
 
 # Create temporary directory for initial clone
@@ -248,7 +261,7 @@ cd $TEMP_DIR
 git fetch --all --tags
 
 if [ "$IS_PR" = true ]; then
-    echo "Fetching Pull Request #$PR_NUMBER"
+    print_message "Fetching Pull Request #$PR_NUMBER"
     git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER"
     if [ $? -ne 0 ]; then
         echo "Failed to fetch PR #$PR_NUMBER"
@@ -283,7 +296,7 @@ fi
 
 # Emit the version tag that was checked out
 CHECKED_OUT_VERSION=$(git describe --tags)
-echo "Checked out version: $CHECKED_OUT_VERSION"
+print_message "Checked out version: $CHECKED_OUT_VERSION"
 
 # Perform go build with verbose flag
 OUTPUT_BINARY="${PROVIDER_NAME}_${CHECKED_OUT_VERSION}"
@@ -310,7 +323,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Build completed successfully. Output binary: $TERRAFORM_PATH/$OUTPUT_BINARY"
+print_message "Build completed successfully. Output binary: $TERRAFORM_PATH/$OUTPUT_BINARY"
 
 # Only print the configuration block if --print-configuration was provided
 if [ "$PRINT_CONFIG" = true ]; then
