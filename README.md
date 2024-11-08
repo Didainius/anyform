@@ -22,7 +22,7 @@ You can install AnyForm directly using curl:
 
 ```shell
 sudo curl -L https://github.com/Didainius/anyform/releases/latest/download/anyform -o /usr/local/bin/anyform
-chmod +x /usr/local/bin/anyform
+sudo chmod 755 /usr/local/bin/anyform
 ```
 
 ### Use cases
