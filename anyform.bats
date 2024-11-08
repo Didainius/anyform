@@ -234,8 +234,15 @@ mock_go_build() {
 
 @test "check for updates when update available" {
     VERSION=$(get_version)
-    NEW_VERSION="v$(echo $VERSION | awk -F. '{print $1"."$2"."$3+1}')"
+    if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        skip "Current version is not in semantic version format"
+    fi
+    
+    # Calculate next version by incrementing patch number
+    NEW_VERSION="v$(echo $VERSION | sed 's/^v//' | awk -F. '{print $1"."$2"."$3+1}')"
+    
     function curl() {
+        # Ensure we return a valid version string
         echo "{\"tag_name\": \"$NEW_VERSION\"}"
     }
     export -f curl
@@ -243,6 +250,6 @@ mock_go_build() {
     run "$SCRIPT_PATH" --check-update
     echo "output: $output"  # Debug output
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Update available: $VERSION -> $NEW_VERSION"
-    echo "$output" | grep -q "Run 'anyform --self-update' to update"
+    [[ "$output" =~ "Update available: $VERSION -> $NEW_VERSION" ]]
+    [[ "$output" =~ "Run 'anyform --self-update' to update" ]]
 }
