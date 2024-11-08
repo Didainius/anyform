@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Version
-VERSION="v0.6.0"
+VERSION="v0.8.0"
 
 # Initialize flag variables
 PRINT_CONFIG=false
