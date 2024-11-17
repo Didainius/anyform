@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 
 # Version
-VERSION="v0.8.0"
+VERSION="v0.9.0"
 
 # Initialize flag variables
 PRINT_CONFIG=false
 SILENT=false
+OPENTOFU_ONLY=false
+
+# Function to cleanup temporary files
+cleanup() {
+    local exit_code=$?
+    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
+        rm -rf "$TEMP_DIR"
+    fi
+    exit $exit_code
+}
+
+# Register cleanup handler
+trap cleanup EXIT INT TERM
 
 # Function to check for latest version
 check_latest_version() {
@@ -152,13 +165,14 @@ check_update() {
 
 # Function to print usage
 print_usage() {
-    echo "Usage: $0 [--print-configuration | -p] [--version] [--self-update | -U] [--check-update] [--silent | -s] <repository-address> [git-commit-version]"
+    echo "Usage: $0 [--print-configuration | -p] [--version] [--self-update | -U] [--check-update] [--silent | -s] [--opentofu] <repository-address> [git-commit-version]"
     echo "Options:"
     echo "  --print-configuration, -p  Print the Terraform configuration block"
     echo "  --version                  Print version information"
     echo "  --self-update, -U          Update anyform to the latest version"
     echo "  --check-update             Check if a new version is available"
     echo "  --silent, -s               Run in silent mode (no output except errors)"
+    echo "  --opentofu                 Install for OpenTofu only (skip Terraform)"
     echo "  -h, --help                 Show this help message"
     echo "Note: Repository address can be:"
     echo "  - Repository URL: https://github.com/<organization>/terraform-provider-<name>"
@@ -200,6 +214,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --silent|-s)
             SILENT=true
+            shift
+            ;;
+        --opentofu)
+            OPENTOFU_ONLY=true
             shift
             ;;
         -h|--help)
@@ -353,31 +371,53 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Determine the local .terraform.d path based on GOOS and GOARCH in the user's home directory
+# Function to get installation paths
+get_installation_paths() {
+    local goos=$1
+    local goarch=$2
+    local org=$3
+    local provider=$4
+    local version=$5
+    
+    # Ensure we have valid OS and ARCH
+    [ -z "$goos" ] && goos=$(go env GOOS)
+    [ -z "$goarch" ] && goarch=$(go env GOARCH)
+    
+    local version_no_prefix=$(echo "$version" | sed 's/^v//')
+    
+    if [ "$OPENTOFU_ONLY" = true ]; then
+        echo "$HOME/.terraform.d/plugins/registry.opentofu.org/${org}/${provider}/${version_no_prefix}/${goos}_${goarch}"
+    else
+        echo "$HOME/.terraform.d/plugins/registry.terraform.io/${org}/${provider}/${version_no_prefix}/${goos}_${goarch}"
+    fi
+}
+
+# Get installation path using the checked out version
 GOOS=$(go env GOOS)
 GOARCH=$(go env GOARCH)
-VERSION=$CHECKED_OUT_VERSION
-VERSION_NO_PREFIX=$(echo "$VERSION" | sed 's/^v//')
-TERRAFORM_PATH="$HOME/.terraform.d/plugins/registry.terraform.io/${ORGANIZATION}/${PROVIDER_TYPE}/${VERSION_NO_PREFIX}/${GOOS}_${GOARCH}"
+INSTALL_PATH=$(get_installation_paths "$GOOS" "$GOARCH" "$ORGANIZATION" "$PROVIDER_TYPE" "$CHECKED_OUT_VERSION")
 
-# Create the directory if it doesn't exist
-mkdir -p $TERRAFORM_PATH
-
-# Move the built binary to the .terraform path
-mv $OUTPUT_BINARY $TERRAFORM_PATH/
+# Create directory and copy binary
+mkdir -p "$INSTALL_PATH"
+cp "$OUTPUT_BINARY" "$INSTALL_PATH/"
 if [ $? -ne 0 ]; then
-    echo "Failed to move binary to $TERRAFORM_PATH"
+    echo "Failed to copy binary to $INSTALL_PATH"
     exit 1
 fi
+print_message "Binary installed to: $INSTALL_PATH/$OUTPUT_BINARY"
 
-print_message "Build completed successfully. Output binary: $TERRAFORM_PATH/$OUTPUT_BINARY"
+# Clean up the original binary
+rm "$OUTPUT_BINARY"
 
 # Only print the configuration block if --print-configuration was provided
 if [ "$PRINT_CONFIG" = true ]; then
-    # Remove 'v' prefix from version if it exists
-    VERSION_NO_PREFIX=$(echo "$VERSION" | sed 's/^v//')
+    VERSION_NO_PREFIX=$(echo "$CHECKED_OUT_VERSION" | sed 's/^v//')
     if [ "$SILENT" = false ]; then
-        echo "To use this provider in your Terraform configuration, add the following block:"
+        if [ "$OPENTOFU_ONLY" = true ]; then
+            echo "To use this provider in your OpenTofu configuration, add the following block:"
+        else
+            echo "To use this provider in your Terraform configuration, add the following block:"
+        fi
     fi
     echo "
 terraform {
