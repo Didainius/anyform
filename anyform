@@ -386,7 +386,7 @@ get_installation_paths() {
     local version_no_prefix=$(echo "$version" | sed 's/^v//')
     
     if [ "$OPENTOFU_ONLY" = true ]; then
-        echo "$HOME/.tofu.d/plugins/registry.opentofu.org/${org}/${provider}/${version_no_prefix}/${goos}_${goarch}"
+        echo "$HOME/.terraform.d/plugins/registry.opentofu.org/${org}/${provider}/${version_no_prefix}/${goos}_${goarch}"
     else
         echo "$HOME/.terraform.d/plugins/registry.terraform.io/${org}/${provider}/${version_no_prefix}/${goos}_${goarch}"
     fi
@@ -420,7 +420,7 @@ if [ "$PRINT_CONFIG" = true ]; then
         fi
     fi
     echo "
-$(if [ "$OPENTOFU_ONLY" = true ]; then echo "tofu"; else echo "terraform"; fi) {
+terraform {
   required_providers {
     $PROVIDER_TYPE = {
       source = \"$ORGANIZATION/$PROVIDER_TYPE\"
