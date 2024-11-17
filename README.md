@@ -86,7 +86,7 @@ Turn off this advice by setting config variable advice.detachedHead to false
 
 HEAD is now at 24354ad1e allow 120m to run the tests
 Checked out version: v4.45.0-13-g24354ad1e
-Binary installed to: /Users/dainius/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.45.0-13-g24354ad1e/darwin_arm64/terraform-provider-cloudflare_v4.45.0-13-g24354ad1e
+Binary installed to: /Users/user/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.45.0-13-g24354ad1e/darwin_arm64/terraform-provider-cloudflare_v4.45.0-13-g24354ad1e
 To use this provider in your Terraform configuration, add the following block:
 
 terraform {
@@ -118,7 +118,7 @@ Previous HEAD position was 24354ad1e allow 120m to run the tests
 Switched to branch 'pr-4414'
 Checked out version: v4.44.0-14-gc4a40be72
 go: downloading github.com/hashicorp/terraform-plugin-framework-validators v0.14.0
-Binary installed to: /Users/dainius/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.44.0-14-gc4a40be72/darwin_arm64/terraform-provider-cloudflare_v4.44.0-14-gc4a40be72
+Binary installed to: /Users/user/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.44.0-14-gc4a40be72/darwin_arm64/terraform-provider-cloudflare_v4.44.0-14-gc4a40be72
 To use this provider in your Terraform configuration, add the following block:
 
 terraform {
