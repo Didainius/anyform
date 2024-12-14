@@ -307,6 +307,15 @@ mock_go_build() {
     chmod +x "${MOCK_BIN_DIR}/curl"
 
     run "$SCRIPT_PATH" --self-update
+
+    # Debug output to help identify the issue
+    if [ "$status" -ne 1 ] || ! [[ "${output}" =~ "curl is not installed." ]]; then
+        echo "Debug Information:"
+        echo "Exit Status: $status"
+        echo "Output:"
+        echo "$output"
+    fi
+
     [ "$status" -eq 1 ]
     [[ "${output}" =~ "curl is not installed. Please install curl to use self-update feature." ]]
 
