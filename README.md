@@ -5,7 +5,8 @@
     <p><strong>Install any Terraform Provider straight from source - your gateway to custom provider versions!</strong></p>
    
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" /></a>
-</div>
+  <a href="https://github.com/Didainius/anyform/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/Didainius/anyform/test.yml?style=for-the-badge" /></a>
+  </div>
 
 ## AnyForm - Any Terraform Provider version from source
 
