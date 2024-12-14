@@ -1,35 +1,62 @@
 #!/usr/bin/env bash
 
+# Enable strict mode to catch errors and undefined variables
+set -euo pipefail
+
+# Initialize variables to prevent unbound variable errors
+TEMP_DIR=""
+REPO_ADDRESS=""
+COMMIT_VERSION=""
+IS_PR=false
+PR_NUMBER=""
+
 # Version
-VERSION="v0.9.0"
+VERSION="v0.10.0"
 
 # Initialize flag variables
 PRINT_CONFIG=false
 SILENT=false
 OPENTOFU_ONLY=false
 
+# Function to print error messages
+print_error() {
+    echo "Error: $1" >&2
+}
+
 # Function to cleanup temporary files
 cleanup() {
     local exit_code=$?
-    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
+    if [ -n "${TEMP_DIR}" ] && [ -d "$TEMP_DIR" ]; then
         rm -rf "$TEMP_DIR"
     fi
+    trap - EXIT INT TERM
     exit $exit_code
 }
 
 # Register cleanup handler
 trap cleanup EXIT INT TERM
 
+# Check if dependencies are installed before proceeding
+if ! command -v curl > /dev/null 2>&1; then
+    print_error "curl is not installed. Please install curl to continue."
+    exit 1
+fi
+
+if ! command -v unzip > /dev/null 2>&1; then
+    print_error "unzip is not installed. Please install unzip to continue."
+    exit 1
+fi
+
 # Function to check for latest version
 check_latest_version() {
     if ! command -v curl > /dev/null 2>&1; then
-        echo "curl is not installed. Please install curl to use self-update feature."
+        print_error "curl is not installed. Please install curl to use self-update feature."
         exit 1
     fi
     
     LATEST_VERSION=$(curl -s https://api.github.com/repos/Didainius/anyform/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     if [ -z "$LATEST_VERSION" ] || ! [[ "$LATEST_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "Failed to fetch latest version information"
+        print_error "Failed to fetch latest version information"
         exit 1
     fi
     echo $LATEST_VERSION
@@ -84,7 +111,7 @@ check_write_permissions() {
     
     # Check if file exists and we have write permissions
     if [ -f "$target" ] && [ ! -w "$target" ]; then
-        echo "Error: Insufficient permissions to modify $target"
+        print_error "Insufficient permissions to modify $target"
         echo "Please run with sudo: sudo anyform --self-update"
         return 1
     fi
@@ -92,7 +119,7 @@ check_write_permissions() {
     # Check if directory is writable if file doesn't exist
     local target_dir=$(dirname "$target")
     if [ ! -w "$target_dir" ]; then
-        echo "Error: Insufficient permissions to write to $target_dir"
+        print_error "Insufficient permissions to write to $target_dir"
         echo "Please run with sudo: sudo anyform --self-update"
         return 1
     fi
@@ -109,7 +136,7 @@ self_update() {
         echo "Already running the latest version $VERSION"
         exit 0
     elif [ "$COMPARE_RESULT" -eq -1 ]; then
-        echo "Error: Latest available version ($LATEST_VERSION) is older than current version ($VERSION)"
+        print_error "Latest available version ($LATEST_VERSION) is older than current version ($VERSION)"
         exit 1
     fi
     
@@ -135,12 +162,12 @@ self_update() {
             echo "Successfully updated to $LATEST_VERSION"
         else
             rm -f "$TEMP_FILE"
-            echo "Failed to move updated script to $CURRENT_SCRIPT"
+            print_error "Failed to move updated script to $CURRENT_SCRIPT"
             exit 1
         fi
     else
         rm -f "$TEMP_FILE"
-        echo "Failed to download update"
+        print_error "Failed to download update"
         exit 1
     fi
 }
@@ -257,7 +284,7 @@ if [[ $REPO_ADDRESS =~ $PR_PATTERN ]]; then
     PR_NUMBER="${BASH_REMATCH[1]}"
     # Validate PR number is numeric and positive
     if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
-        echo "Error: Invalid pull request number: $PR_NUMBER"
+        print_error "Invalid pull request number: $PR_NUMBER"
         echo "Pull request number must be a positive integer"
         exit 1
     fi
@@ -269,7 +296,7 @@ fi
 if [[ $REPO_ADDRESS =~ $GITHUB_PATTERN ]]; then
     ORGANIZATION="${BASH_REMATCH[1]}"
 else
-    echo "Error: Unable to extract organization from repository address"
+    print_error "Unable to extract organization from repository address"
     echo "Repository address must be in format: https://github.com/<organization>/terraform-provider-<name>"
     exit 1
 fi
@@ -279,7 +306,7 @@ if [[ $REPO_ADDRESS =~ $PROVIDER_PATTERN ]]; then
     PROVIDER_NAME="terraform-provider-${BASH_REMATCH[1]}"
     PROVIDER_TYPE="${BASH_REMATCH[1]}"
 else
-    echo "Error: Unable to extract provider name from repository address"
+    print_error "Unable to extract provider name from repository address"
     echo "Repository name must be in format: terraform-provider-<name>"
     exit 1
 fi
@@ -288,15 +315,15 @@ print_message "Organization: $ORGANIZATION"
 print_message "Provider Name: $PROVIDER_NAME"
 print_message "Provider Type: $PROVIDER_TYPE"
 
-# Check if git is installed
-if ! command -v git > /dev/null 2>&1; then
-    echo "git is not installed. Please install git and try again."
+# Check if git is installed and executable
+if ! command -v git > /dev/null 2>&1 || ! git --version > /dev/null 2>&1; then
+    print_error "git is not installed. Please install git and try again."
     exit 1
 fi
 
-# Check if go is installed
-if ! command -v go > /dev/null 2>&1; then
-    echo "Go is not installed. Please install Go and try again."
+# Check if go is installed and executable
+if ! command -v go > /dev/null 2>&1 || ! go version > /dev/null 2>&1; then
+    print_error "Go is not installed. Please install Go and try again."
     exit 1
 fi
 
@@ -312,7 +339,7 @@ if [ ! -d "$TEMP_DIR" ]; then
     mkdir -p $TEMP_DIR
     git clone $REPO_ADDRESS $TEMP_DIR
     if [ $? -ne 0 ]; then
-        echo "Failed to clone repository"
+        print_error "Failed to clone repository"
         exit 1
     fi
 fi
@@ -325,7 +352,7 @@ if [ "$IS_PR" = true ]; then
     print_message "Fetching Pull Request #$PR_NUMBER"
     git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER"
     if [ $? -ne 0 ]; then
-        echo "Failed to fetch PR #$PR_NUMBER"
+        print_error "Failed to fetch PR #$PR_NUMBER"
         exit 1
     fi
     # If no specific commit version provided, use the PR branch
@@ -337,7 +364,7 @@ fi
 # Determine commit version early
 if [ -n "$COMMIT_VERSION" ]; then
     if ! git rev-parse --quiet --verify "$COMMIT_VERSION^{commit}" >/dev/null; then
-        echo "Failed to verify commit $COMMIT_VERSION"
+        print_error "Failed to verify commit $COMMIT_VERSION"
         exit 1
     fi
 else
@@ -355,7 +382,7 @@ else
     git checkout $COMMIT_VERSION
 fi
 if [ $? -ne 0 ]; then
-    echo "Failed to checkout commit $COMMIT_VERSION"
+    print_error "Failed to checkout commit $COMMIT_VERSION"
     exit 1
 fi
 
@@ -367,7 +394,7 @@ print_message "Checked out version: $CHECKED_OUT_VERSION"
 OUTPUT_BINARY="${PROVIDER_NAME}_${CHECKED_OUT_VERSION}"
 go build -o $OUTPUT_BINARY
 if [ $? -ne 0 ]; then
-    echo "Failed to build"
+    print_error "Failed to build"
     exit 1
 fi
 
@@ -401,7 +428,7 @@ INSTALL_PATH=$(get_installation_paths "$GOOS" "$GOARCH" "$ORGANIZATION" "$PROVID
 mkdir -p "$INSTALL_PATH"
 cp "$OUTPUT_BINARY" "$INSTALL_PATH/"
 if [ $? -ne 0 ]; then
-    echo "Failed to copy binary to $INSTALL_PATH"
+    print_error "Failed to copy binary to $INSTALL_PATH"
     exit 1
 fi
 print_message "Binary installed to: $INSTALL_PATH/$OUTPUT_BINARY"

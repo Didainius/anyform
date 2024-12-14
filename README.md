@@ -35,20 +35,37 @@ sudo chmod 755 /usr/local/bin/anyform
 ### Usage
 
 ```shell
-anyform --help
-Usage: ./anyform [--print-configuration | -p] [--version] [--self-update | -U] [--check-update] [--silent | -s] [--opentofu] <repository-address> [git-commit-version]
-Options:
-  --print-configuration, -p  Print the Terraform configuration block
-  --version                  Print version information
-  --self-update, -U          Update anyform to the latest version
-  --check-update             Check if a new version is available
-  --silent, -s               Run in silent mode (no output except errors)
-  --opentofu                 Install for OpenTofu only (skip Terraform)
-  -h, --help                 Show this help message
-Note: Repository address can be:
-  - Repository URL: https://github.com/<organization>/terraform-provider-<name>
-  - Pull Request URL: https://github.com/<organization>/terraform-provider-<name>/pull/<number>
-If git-commit-version is not specified, the latest commit from default branch or PR will be used
+anyform [options] <repository-address> [git-commit-version]
+```
+
+#### Options
+
+- `--print-configuration`, `-p`: Print the Terraform configuration block.
+- `--version`: Print version information.
+- `--self-update`, `-U`: Update AnyForm to the latest version.
+- `--check-update`: Check if a new version is available.
+- `--silent`, `-s`: Run in silent mode (no output except errors).
+- `--opentofu`: Install for OpenTofu only (skip Terraform).
+- `-h`, `--help`: Show help message.
+
+#### Additional Examples
+
+Install the latest version of a provider:
+
+```shell
+anyform https://github.com/hashicorp/terraform-provider-aws
+```
+
+Install a specific commit of a provider:
+
+```shell
+anyform https://github.com/hashicorp/terraform-provider-aws abc123def
+```
+
+Install a provider for OpenTofu only:
+
+```shell
+anyform --opentofu https://github.com/opentofu/terraform-provider-example
 ```
 
 #### Example

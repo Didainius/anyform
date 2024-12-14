@@ -75,8 +75,16 @@ exit 0
 EOF
     chmod +x "${MOCK_BIN_DIR}/go"
 
+    # Create mock curl script
+    cat > "${MOCK_BIN_DIR}/curl" << 'EOF'
+#!/bin/sh
+echo "Mocked curl"
+exit 0
+EOF
+    chmod +x "${MOCK_BIN_DIR}/curl"
+
     # Add mock bin to PATH
-    PATH="${MOCK_BIN_DIR}:$PATH"
+    PATH="${MOCK_BIN_DIR}:/usr/bin:$PATH"
     
     # Create temporary test directory
     TEST_TEMP_DIR="$(mktemp -d)"
@@ -84,9 +92,23 @@ EOF
     # Mock git repository setup
     mkdir -p "${TEST_TEMP_DIR}/terraform-provider-corner"
     MOCK_REPO="https://github.com/hashicorp/terraform-provider-corner"
+
+    # Set necessary environment variables for testing
+    export REPO_ADDRESS=""
+    export COMMIT_VERSION=""
+    export TEMP_DIR=""
+
+    # Backup original PATH
+    ORIGINAL_PATH="$PATH"
+
+    # Prepend MOCK_BIN_DIR to PATH
+    PATH="${MOCK_BIN_DIR}:$ORIGINAL_PATH"
 }
 
 teardown() {
+    # Restore the original PATH
+    PATH="$ORIGINAL_PATH"
+
     # Clean up temporary directory
     rm -rf "${TEST_TEMP_DIR}"
     rm -rf "${MOCK_BIN_DIR}"
@@ -257,4 +279,38 @@ mock_go_build() {
     echo "output: $output"  # Debug output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Update available:" ]]
+}
+
+@test "fails when git is not installed" {
+    # Backup the original mock 'git' script
+    mv "${MOCK_BIN_DIR}/git" "${MOCK_BIN_DIR}/git_backup"
+    
+    # Replace mock 'git' with a script that exits with code 127
+    echo -e '#!/bin/sh\nexit 127' > "${MOCK_BIN_DIR}/git"
+    chmod +x "${MOCK_BIN_DIR}/git"
+    
+    run "$SCRIPT_PATH" "${MOCK_REPO}"
+    [ "$status" -eq 1 ]
+    [[ "${output}" =~ "git is not installed. Please install git and try again." ]]
+    
+    # Restore the original mock 'git' script
+    rm "${MOCK_BIN_DIR}/git"
+    mv "${MOCK_BIN_DIR}/git_backup" "${MOCK_BIN_DIR}/git"
+}
+
+@test "fails when curl is not installed" {
+    # Backup the original mock 'curl' script
+    mv "${MOCK_BIN_DIR}/curl" "${MOCK_BIN_DIR}/curl_backup"
+    
+    # Replace mock 'curl' with a script that exits with code 127
+    echo -e '#!/bin/sh\nexit 127' > "${MOCK_BIN_DIR}/curl"
+    chmod +x "${MOCK_BIN_DIR}/curl"
+    
+    run "$SCRIPT_PATH" --self-update
+    [ "$status" -eq 1 ]
+    [[ "${output}" =~ "curl is not installed. Please install curl to use self-update feature." ]]
+    
+    # Restore the original mock 'curl' script
+    rm "${MOCK_BIN_DIR}/curl"
+    mv "${MOCK_BIN_DIR}/curl_backup" "${MOCK_BIN_DIR}/curl"
 }
