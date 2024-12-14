@@ -301,15 +301,15 @@ mock_go_build() {
 @test "fails when curl is not installed" {
     # Backup the original mock 'curl' script
     mv "${MOCK_BIN_DIR}/curl" "${MOCK_BIN_DIR}/curl_backup"
-    
+
     # Replace mock 'curl' with a script that exits with code 127
     echo -e '#!/bin/sh\nexit 127' > "${MOCK_BIN_DIR}/curl"
     chmod +x "${MOCK_BIN_DIR}/curl"
-    
+
     run "$SCRIPT_PATH" --self-update
     [ "$status" -eq 1 ]
     [[ "${output}" =~ "curl is not installed. Please install curl to use self-update feature." ]]
-    
+
     # Restore the original mock 'curl' script
     rm "${MOCK_BIN_DIR}/curl"
     mv "${MOCK_BIN_DIR}/curl_backup" "${MOCK_BIN_DIR}/curl"
