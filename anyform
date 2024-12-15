@@ -342,8 +342,12 @@ fi
 # Create temporary directory for initial clone
 TEMP_DIR="/tmp/${PROVIDER_NAME}"
 if [ ! -d "$TEMP_DIR" ]; then
-    mkdir -p $TEMP_DIR
-    git clone $REPO_ADDRESS $TEMP_DIR
+    mkdir -p "$TEMP_DIR"
+    if [ "$SILENT" = true ]; then
+        git clone "$REPO_ADDRESS" "$TEMP_DIR" >/dev/null 2>&1
+    else
+        git clone "$REPO_ADDRESS" "$TEMP_DIR"
+    fi
     if [ $? -ne 0 ]; then
         print_error "Failed to clone repository"
         exit 1
@@ -351,12 +355,20 @@ if [ ! -d "$TEMP_DIR" ]; then
 fi
 
 # Change to temp directory and update repository
-cd $TEMP_DIR
-git fetch --all --tags
+cd "$TEMP_DIR"
+if [ "$SILENT" = true ]; then
+    git fetch --all --tags >/dev/null 2>&1
+else
+    git fetch --all --tags
+fi
 
 if [ "$IS_PR" = true ]; then
     print_message "Fetching Pull Request #$PR_NUMBER"
-    git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER"
+    if [ "$SILENT" = true ]; then
+        git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER" >/dev/null 2>&1
+    else
+        git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER"
+    fi
     if [ $? -ne 0 ]; then
         print_error "Failed to fetch PR #$PR_NUMBER"
         exit 1
@@ -375,7 +387,7 @@ if [ -n "$COMMIT_VERSION" ]; then
     fi
 else
     echo "No commit version specified, using latest commit from default branch"
-    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
     git fetch origin $DEFAULT_BRANCH
     COMMIT_VERSION=$(git rev-parse origin/$DEFAULT_BRANCH)
     echo "Using commit: $COMMIT_VERSION"
@@ -383,9 +395,9 @@ fi
 
 # Checkout the determined version
 if [ "$SILENT" = true ]; then
-    git checkout $COMMIT_VERSION >/dev/null 2>&1
+    git checkout "$COMMIT_VERSION" >/dev/null 2>&1
 else
-    git checkout $COMMIT_VERSION
+    git checkout "$COMMIT_VERSION"
 fi
 if [ $? -ne 0 ]; then
     print_error "Failed to checkout commit $COMMIT_VERSION"
@@ -393,12 +405,16 @@ if [ $? -ne 0 ]; then
 fi
 
 # Emit the version tag that was checked out
-CHECKED_OUT_VERSION=$(git describe --tags)
+CHECKED_OUT_VERSION=$(git describe --tags 2>/dev/null)
 print_message "Checked out version: $CHECKED_OUT_VERSION"
 
 # Perform go build with verbose flag
 OUTPUT_BINARY="${PROVIDER_NAME}_${CHECKED_OUT_VERSION}"
-go build -o $OUTPUT_BINARY
+if [ "$SILENT" = true ]; then
+    go build -o "$OUTPUT_BINARY" >/dev/null 2>&1
+else
+    go build -o "$OUTPUT_BINARY"
+fi
 if [ $? -ne 0 ]; then
     print_error "Failed to build"
     exit 1
