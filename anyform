@@ -4,14 +4,14 @@
 set -euo pipefail
 
 # Initialize variables to prevent unbound variable errors
-TEMP_DIR=""
+TEMP_DIR="" # This will be set by mktemp -d later
 REPO_ADDRESS=""
 COMMIT_VERSION=""
 IS_PR=false
 PR_NUMBER=""
 
 # Version
-VERSION="v0.10.0"
+VERSION="v0.11.0"
 
 # Initialize flag variables
 PRINT_CONFIG=false
@@ -26,51 +26,60 @@ print_error() {
 # Function to cleanup temporary files
 cleanup() {
     local exit_code=$?
-    if [ -n "${TEMP_DIR}" ] && [ -d "$TEMP_DIR" ]; then
+    # Only remove TEMP_DIR if it was set and is a directory
+    if [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
         rm -rf "$TEMP_DIR"
+        TEMP_DIR="" # Reset TEMP_DIR after removal
     fi
+    # Ensure trap handler is removed to prevent potential recursion on exit
     trap - EXIT INT TERM
+    # Exit with the original exit code
     exit $exit_code
 }
 
 # Register cleanup handler
 trap cleanup EXIT INT TERM
 
-# Check if dependencies are installed before proceeding
+# --- Dependency Checks ---
+# Check if essential dependencies are installed before proceeding
 if ! command -v curl > /dev/null 2>&1; then
     print_error "curl is not installed. Please install curl to continue."
     exit 1
 fi
-
-if ! command -v unzip > /dev/null 2>&1; then
-    print_error "unzip is not installed. Please install unzip to continue."
+# Check if git is installed and executable
+if ! command -v git > /dev/null 2>&1; then
+    print_error "git is not installed. Please install git and try again."
     exit 1
 fi
-
-# Check if curl is installed and executable
-if ! command -v curl > /dev/null 2>&1 || ! curl --version > /dev/null 2>&1; then
-    print_error "curl is not installed. Please install curl to use self-update feature."
+# Check if go is installed and executable
+if ! command -v go > /dev/null 2>&1; then
+    print_error "Go is not installed. Please install Go and try again."
     exit 1
 fi
+# Removed unzip check as it's not used
+
+# --- Versioning and Update Functions ---
 
 # Function to check for latest version
 check_latest_version() {
-    if ! command -v curl > /dev/null 2>&1; then
-        print_error "curl is not installed. Please install curl to use self-update feature."
-        exit 1
+    local latest_version
+    # Use default empty string if curl fails or returns nothing
+    latest_version=$(curl -s https://api.github.com/repos/Didainius/anyform/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo "")
+    if [ -z "$latest_version" ] || ! [[ "$latest_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # Return non-zero status code on failure
+        return 1
     fi
-    
-    LATEST_VERSION=$(curl -s https://api.github.com/repos/Didainius/anyform/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$LATEST_VERSION" ] || ! [[ "$LATEST_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        print_error "Failed to fetch latest version information"
-        exit 1
-    fi
-    echo $LATEST_VERSION
+    echo "$latest_version"
+    return 0
 }
 
 # Function to compare semantic versions
 # Returns 1 if version1 > version2, 0 if equal, -1 if version1 < version2
 compare_versions() {
+    local version1 version2
+    local v1_major v1_minor v1_patch v2_major v2_minor v2_patch
+    
+    # Remove 'v' prefix
     version1=$(echo "$1" | sed 's/^v//')
     version2=$(echo "$2" | sed 's/^v//')
     
@@ -79,54 +88,43 @@ compare_versions() {
         return
     fi
     
+    # Split versions into components
     IFS='.' read -r v1_major v1_minor v1_patch <<< "${version1}"
     IFS='.' read -r v2_major v2_minor v2_patch <<< "${version2}"
     
-    # Extract numeric parts (handle cases like "1.2.3-beta")
+    # Extract numeric parts only (handle cases like "1.2.3-beta")
     v1_patch=$(echo "$v1_patch" | sed 's/[^0-9].*//')
     v2_patch=$(echo "$v2_patch" | sed 's/[^0-9].*//')
     
-    # Convert empty values to 0
-    v1_major=${v1_major:-0}
-    v1_minor=${v1_minor:-0}
-    v1_patch=${v1_patch:-0}
-    v2_major=${v2_major:-0}
-    v2_minor=${v2_minor:-0}
-    v2_patch=${v2_patch:-0}
+    # Convert empty or non-numeric values to 0
+    v1_major=${v1_major:-0}; [[ ! "$v1_major" =~ ^[0-9]+$ ]] && v1_major=0
+    v1_minor=${v1_minor:-0}; [[ ! "$v1_minor" =~ ^[0-9]+$ ]] && v1_minor=0
+    v1_patch=${v1_patch:-0}; [[ ! "$v1_patch" =~ ^[0-9]+$ ]] && v1_patch=0
+    v2_major=${v2_major:-0}; [[ ! "$v2_major" =~ ^[0-9]+$ ]] && v2_major=0
+    v2_minor=${v2_minor:-0}; [[ ! "$v2_minor" =~ ^[0-9]+$ ]] && v2_minor=0
+    v2_patch=${v2_patch:-0}; [[ ! "$v2_patch" =~ ^[0-9]+$ ]] && v2_patch=0
     
-    if [ "$v1_major" -gt "$v2_major" ] 2>/dev/null; then
-        echo 1
-    elif [ "$v1_major" -lt "$v2_major" ] 2>/dev/null; then
-        echo -1
-    elif [ "$v1_minor" -gt "$v2_minor" ] 2>/dev/null; then
-        echo 1
-    elif [ "$v1_minor" -lt "$v2_minor" ] 2>/dev/null; then
-        echo -1
-    elif [ "$v1_patch" -gt "$v2_patch" ] 2>/dev/null; then
-        echo 1
-    elif [ "$v1_patch" -lt "$v2_patch" ] 2>/dev/null; then
-        echo -1
-    else
-        echo 0
+    # Perform comparisons
+    if [ "$v1_major" -gt "$v2_major" ]; then echo 1
+    elif [ "$v1_major" -lt "$v2_major" ]; then echo -1
+    elif [ "$v1_minor" -gt "$v2_minor" ]; then echo 1
+    elif [ "$v1_minor" -lt "$v2_minor" ]; then echo -1
+    elif [ "$v1_patch" -gt "$v2_patch" ]; then echo 1
+    elif [ "$v1_patch" -lt "$v2_patch" ]; then echo -1
+    else echo 0
     fi
 }
 
 # Function to check if we have write permissions
 check_write_permissions() {
     local target="$1"
+    local target_dir
+    target_dir=$(dirname "$target")
     
-    # Check if file exists and we have write permissions
-    if [ -f "$target" ] && [ ! -w "$target" ]; then
-        print_error "Insufficient permissions to modify $target"
-        echo "Please run with sudo: sudo anyform --self-update"
-        return 1
-    fi
-    
-    # Check if directory is writable if file doesn't exist
-    local target_dir=$(dirname "$target")
-    if [ ! -w "$target_dir" ]; then
-        print_error "Insufficient permissions to write to $target_dir"
-        echo "Please run with sudo: sudo anyform --self-update"
+    # Check if target exists and is not writable OR target directory is not writable
+    if { [ -f "$target" ] && [ ! -w "$target" ]; } || [ ! -w "$target_dir" ]; then
+        print_error "Insufficient permissions to write to $target or its directory $target_dir"
+        echo "Please try running with sudo: sudo anyform --self-update"
         return 1
     fi
     
@@ -135,44 +133,60 @@ check_write_permissions() {
 
 # Function to perform self-update
 self_update() {
-    LATEST_VERSION=$(check_latest_version)
-    COMPARE_RESULT=$(compare_versions "$LATEST_VERSION" "$VERSION")
+    local latest_version compare_result current_script temp_file
     
-    if [ "$COMPARE_RESULT" -eq 0 ]; then
+    latest_version=$(check_latest_version)
+    if [ $? -ne 0 ]; then
+        print_error "Failed to fetch latest version information"
+        exit 1
+    fi
+    
+    compare_result=$(compare_versions "$latest_version" "$VERSION")
+    
+    if [ "$compare_result" -eq 0 ]; then
         echo "Already running the latest version $VERSION"
         exit 0
-    elif [ "$COMPARE_RESULT" -eq -1 ]; then
-        print_error "Latest available version ($LATEST_VERSION) is older than current version ($VERSION)"
+    elif [ "$compare_result" -eq -1 ]; then
+        print_error "Latest available version ($latest_version) is older than current version ($VERSION)"
         exit 1
     fi
     
     # Find current script location
-    CURRENT_SCRIPT="$(command -v anyform)"
-    if [ -z "$CURRENT_SCRIPT" ]; then
-        CURRENT_SCRIPT="$0"
+    current_script="$(command -v anyform)" || current_script="$0"
+    if [ -z "$current_script" ]; then
+        print_error "Could not determine the location of the currently running script."
+        exit 1
     fi
-    
+    # Resolve symlinks to get the actual script path
+    current_script=$(readlink -f "$current_script" || realpath "$current_script" || echo "$current_script")
+
     # Check permissions before proceeding
-    if ! check_write_permissions "$CURRENT_SCRIPT"; then
+    if ! check_write_permissions "$current_script"; then
         exit 1
     fi
     
-    echo "Updating from $VERSION to $LATEST_VERSION..."
-    TEMP_FILE=$(mktemp)
-    
-    if curl -L "https://github.com/Didainius/anyform/releases/latest/download/anyform" -o "$TEMP_FILE"; then
-        chmod +x "$TEMP_FILE"
-        if mv "$TEMP_FILE" "$CURRENT_SCRIPT"; then
+    echo "Updating from $VERSION to $latest_version..."
+    # Create a temporary file for the download
+    temp_file=$(mktemp)
+    # Ensure temp_file is removed on exit or error during this function
+    trap 'rm -f "$temp_file"' RETURN INT TERM
+
+    if curl -L "https://github.com/Didainius/anyform/releases/latest/download/anyform" -o "$temp_file"; then
+        chmod +x "$temp_file"
+        # Attempt to replace the current script with the downloaded one
+        if mv "$temp_file" "$current_script"; then
             # Set proper permissions (readable and executable by all, writable only by owner)
-            chmod 755 "$CURRENT_SCRIPT"
-            echo "Successfully updated to $LATEST_VERSION"
+            chmod 755 "$current_script"
+            echo "Successfully updated to $latest_version"
+            # Untrap the temporary file as it's been moved
+            trap - RETURN INT TERM
         else
-            rm -f "$TEMP_FILE"
-            print_error "Failed to move updated script to $CURRENT_SCRIPT"
+            # mv failed, temp_file still exists and will be removed by trap
+            print_error "Failed to move updated script to $current_script"
             exit 1
         fi
     else
-        rm -f "$TEMP_FILE"
+        # curl failed, temp_file still exists and will be removed by trap
         print_error "Failed to download update"
         exit 1
     fi
@@ -180,21 +194,30 @@ self_update() {
 
 # Function to check if update is available
 check_update() {
-    LATEST_VERSION=$(check_latest_version)
-    COMPARE_RESULT=$(compare_versions "$LATEST_VERSION" "$VERSION")
+    local latest_version compare_result
     
-    if [ "$COMPARE_RESULT" -eq 0 ]; then
+    latest_version=$(check_latest_version)
+    if [ $? -ne 0 ]; then
+        print_error "Failed to fetch latest version information"
+        exit 1
+    fi
+    
+    compare_result=$(compare_versions "$latest_version" "$VERSION")
+    
+    if [ "$compare_result" -eq 0 ]; then
         echo "You are running the latest version $VERSION"
         exit 0
-    elif [ "$COMPARE_RESULT" -eq -1 ]; then
-        echo "Warning: Latest available version ($LATEST_VERSION) is older than current version ($VERSION)"
-        exit 1
+    elif [ "$compare_result" -eq -1 ]; then
+        echo "Warning: Latest available version ($latest_version) is older than current version ($VERSION)"
+        exit 1 # Exit with non-zero status for warning condition
     else
-        echo "Update available: $VERSION -> $LATEST_VERSION"
+        echo "Update available: $VERSION -> $latest_version"
         echo "Run 'anyform --self-update' to update"
         exit 0
     fi
 }
+
+# --- Main Script Logic ---
 
 # Function to print usage
 print_usage() {
@@ -220,8 +243,8 @@ print_message() {
     fi
 }
 
-# Check if the correct number of arguments are provided
-if [ "$#" -lt 1 ]; then
+# Check if any arguments are provided
+if [ "$#" -eq 0 ]; then
     print_usage
     exit 1
 fi
@@ -273,37 +296,32 @@ done
 
 # Validate required arguments
 if [ -z "$REPO_ADDRESS" ]; then
+    print_error "Repository address is required."
     print_usage
     exit 1
 fi
 
 # Extract provider information and organization from repository address
-GITHUB_PATTERN="https://github.com/([^/]+)/"
+GITHUB_PATTERN="^https://github.com/([^/]+)/" # Added ^ anchor
 PROVIDER_PATTERN="terraform-provider-([^/]+)"
-PR_PATTERN="https://github.com/[^/]+/[^/]+/pull/([^/]+)"  # Changed pattern to match any non-slash characters
+PR_PATTERN="/pull/([0-9]+)" # Simplified PR pattern check after main URL check
 
-# Check if it's a PR URL
+# Check if it's a PR URL and extract PR number
 IS_PR=false
 PR_NUMBER=""
 if [[ $REPO_ADDRESS =~ $PR_PATTERN ]]; then
     IS_PR=true
     PR_NUMBER="${BASH_REMATCH[1]}"
-    # Validate PR number is numeric and positive
-    if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
-        print_error "Invalid pull request number: $PR_NUMBER"
-        echo "Pull request number must be a positive integer"
-        exit 1
-    fi
-    # Convert PR URL to repository URL
-    REPO_ADDRESS=$(echo $REPO_ADDRESS | sed "s/\/pull\/${PR_NUMBER}//")  # Updated to use the actual PR_NUMBER
+    # Remove the PR part from the URL to get the base repo address
+    REPO_ADDRESS=$(echo "$REPO_ADDRESS" | sed -E "s|/pull/[0-9]+/?$||")
 fi
 
 # Extract organization from GitHub URL
 if [[ $REPO_ADDRESS =~ $GITHUB_PATTERN ]]; then
     ORGANIZATION="${BASH_REMATCH[1]}"
 else
-    print_error "Unable to extract organization from repository address"
-    echo "Repository address must be in format: https://github.com/<organization>/terraform-provider-<name>"
+    print_error "Unable to extract organization from repository address: $REPO_ADDRESS"
+    echo "Repository address must start with: https://github.com/<organization>/..."
     exit 1
 fi
 
@@ -312,25 +330,16 @@ if [[ $REPO_ADDRESS =~ $PROVIDER_PATTERN ]]; then
     PROVIDER_NAME="terraform-provider-${BASH_REMATCH[1]}"
     PROVIDER_TYPE="${BASH_REMATCH[1]}"
 else
-    print_error "Unable to extract provider name from repository address"
-    echo "Repository name must be in format: terraform-provider-<name>"
+    print_error "Unable to extract provider name from repository address: $REPO_ADDRESS"
+    echo "Repository name must contain: terraform-provider-<name>"
     exit 1
 fi
 
 print_message "Organization: $ORGANIZATION"
 print_message "Provider Name: $PROVIDER_NAME"
 print_message "Provider Type: $PROVIDER_TYPE"
-
-# Check if git is installed and executable
-if ! command -v git > /dev/null 2>&1 || ! git --version > /dev/null 2>&1; then
-    print_error "git is not installed. Please install git and try again."
-    exit 1
-fi
-
-# Check if go is installed and executable
-if ! command -v go > /dev/null 2>&1 || ! go version > /dev/null 2>&1; then
-    print_error "Go is not installed. Please install Go and try again."
-    exit 1
+if [ "$IS_PR" = true ]; then
+    print_message "Pull Request: #$PR_NUMBER"
 fi
 
 # Print the provided arguments
@@ -339,143 +348,203 @@ if [ -n "$COMMIT_VERSION" ]; then
     print_message "Git Commit Version: $COMMIT_VERSION"
 fi
 
-# Create temporary directory for initial clone
-TEMP_DIR="/tmp/${PROVIDER_NAME}"
-if [ ! -d "$TEMP_DIR" ]; then
-    mkdir -p "$TEMP_DIR"
-    if [ "$SILENT" = true ]; then
-        git clone "$REPO_ADDRESS" "$TEMP_DIR" >/dev/null 2>&1
-    else
-        git clone "$REPO_ADDRESS" "$TEMP_DIR"
-    fi
-    if [ $? -ne 0 ]; then
-        print_error "Failed to clone repository"
-        exit 1
-    fi
+# Create secure temporary directory for cloning
+# TEMP_DIR is cleaned up by the main trap handler
+TEMP_DIR=$(mktemp -d -t anyform_clone_XXXXXX)
+print_message "Cloning repository into temporary directory: $TEMP_DIR"
+
+# Clone repository
+if [ "$SILENT" = true ]; then
+    git clone --quiet "$REPO_ADDRESS" "$TEMP_DIR"
+else
+    git clone "$REPO_ADDRESS" "$TEMP_DIR"
+fi
+if [ $? -ne 0 ]; then
+    print_error "Failed to clone repository from $REPO_ADDRESS"
+    # TEMP_DIR will be cleaned up by trap
+    exit 1
 fi
 
-# Change to temp directory and update repository
+# Change to temp directory
 cd "$TEMP_DIR"
+
+# Fetch updates
+print_message "Fetching updates..."
 if [ "$SILENT" = true ]; then
-    git fetch --all --tags >/dev/null 2>&1
+    git fetch --all --tags --quiet
 else
     git fetch --all --tags
 fi
+if [ $? -ne 0 ]; then
+    print_error "Failed to fetch updates from repository"
+    exit 1
+fi
 
+# Handle PR checkout
 if [ "$IS_PR" = true ]; then
     print_message "Fetching Pull Request #$PR_NUMBER"
+    PR_BRANCH_LOCAL="pr-$PR_NUMBER"
     if [ "$SILENT" = true ]; then
-        git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER" >/dev/null 2>&1
+        git fetch --quiet origin "pull/$PR_NUMBER/head:$PR_BRANCH_LOCAL"
     else
-        git fetch origin "pull/$PR_NUMBER/head:pr-$PR_NUMBER"
+        git fetch origin "pull/$PR_NUMBER/head:$PR_BRANCH_LOCAL"
     fi
     if [ $? -ne 0 ]; then
         print_error "Failed to fetch PR #$PR_NUMBER"
         exit 1
     fi
-    # If no specific commit version provided, use the PR branch
+    # If no specific commit version provided, use the PR branch head
     if [ -z "$COMMIT_VERSION" ]; then
-        COMMIT_VERSION="pr-$PR_NUMBER"
+        COMMIT_VERSION="$PR_BRANCH_LOCAL"
+        print_message "Using HEAD of PR #$PR_NUMBER ($COMMIT_VERSION)"
     fi
 fi
 
-# Determine commit version early
-if [ -n "$COMMIT_VERSION" ]; then
-    if ! git rev-parse --quiet --verify "$COMMIT_VERSION^{commit}" >/dev/null; then
-        print_error "Failed to verify commit $COMMIT_VERSION"
+# Determine commit version if not specified
+if [ -z "$COMMIT_VERSION" ]; then
+    print_message "No commit version specified, determining latest commit from default branch..."
+    # Get default branch name
+    DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
+    if [ -z "$DEFAULT_BRANCH" ]; then
+        print_error "Could not determine the default branch for the repository."
         exit 1
     fi
-else
-    echo "No commit version specified, using latest commit from default branch"
-    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-    git fetch origin $DEFAULT_BRANCH
-    COMMIT_VERSION=$(git rev-parse origin/$DEFAULT_BRANCH)
-    echo "Using commit: $COMMIT_VERSION"
+    print_message "Default branch identified as: $DEFAULT_BRANCH"
+    # Ensure the default branch is up-to-date locally
+    if [ "$SILENT" = true ]; then
+        git fetch --quiet origin "$DEFAULT_BRANCH"
+    else
+        git fetch origin "$DEFAULT_BRANCH"
+    fi
+    # Get the latest commit hash from the default branch
+    COMMIT_VERSION=$(git rev-parse "origin/$DEFAULT_BRANCH")
+    if [ -z "$COMMIT_VERSION" ]; then
+        print_error "Could not determine the latest commit for branch $DEFAULT_BRANCH."
+        exit 1
+    fi
+    print_message "Using latest commit from $DEFAULT_BRANCH: $COMMIT_VERSION"
+fi
+
+# Verify the commit/ref exists before checkout
+if ! git rev-parse --quiet --verify "$COMMIT_VERSION^{commit}" >/dev/null; then
+    print_error "Failed to verify commit/ref: $COMMIT_VERSION"
+    exit 1
 fi
 
 # Checkout the determined version
+print_message "Checking out version: $COMMIT_VERSION"
 if [ "$SILENT" = true ]; then
-    git checkout "$COMMIT_VERSION" >/dev/null 2>&1
+    git checkout --quiet "$COMMIT_VERSION"
 else
     git checkout "$COMMIT_VERSION"
 fi
 if [ $? -ne 0 ]; then
-    print_error "Failed to checkout commit $COMMIT_VERSION"
+    print_error "Failed to checkout commit/ref $COMMIT_VERSION"
     exit 1
 fi
 
-# Emit the version tag that was checked out
-CHECKED_OUT_VERSION=$(git describe --tags 2>/dev/null)
-print_message "Checked out version: $CHECKED_OUT_VERSION"
+# Get a version tag for the build (use commit hash as fallback)
+# Use --exact-match to prefer the tag only if it points directly to the commit
+CHECKED_OUT_VERSION=$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)
+print_message "Using version identifier for build: $CHECKED_OUT_VERSION"
 
-# Perform go build with verbose flag
+# Perform go build
 OUTPUT_BINARY="${PROVIDER_NAME}_${CHECKED_OUT_VERSION}"
+print_message "Building binary: $OUTPUT_BINARY"
 if [ "$SILENT" = true ]; then
     go build -o "$OUTPUT_BINARY" >/dev/null 2>&1
 else
     go build -o "$OUTPUT_BINARY"
 fi
 if [ $? -ne 0 ]; then
-    print_error "Failed to build"
+    print_error "Go build failed"
     exit 1
 fi
+print_message "Build successful: $TEMP_DIR/$OUTPUT_BINARY"
 
 # Function to get installation paths
 get_installation_paths() {
     local goos=$1
     local goarch=$2
     local org=$3
-    local provider=$4
+    local provider_type=$4 # Renamed from 'provider' for clarity
     local version=$5
+    local base_path install_path version_no_prefix registry_host
     
     # Ensure we have valid OS and ARCH
-    [ -z "$goos" ] && goos=$(go env GOOS)
-    [ -z "$goarch" ] && goarch=$(go env GOARCH)
+    goos=${goos:-$(go env GOOS)}
+    goarch=${goarch:-$(go env GOARCH)}
     
-    local version_no_prefix=$(echo "$version" | sed 's/^v//')
+    # Remove 'v' prefix if present for path construction
+    version_no_prefix=$(echo "$version" | sed 's/^v//')
     
+    # Determine registry host based on flag
     if [ "$OPENTOFU_ONLY" = true ]; then
-        echo "$HOME/.terraform.d/plugins/registry.opentofu.org/${org}/${provider}/${version_no_prefix}/${goos}_${goarch}"
+        registry_host="registry.opentofu.org"
     else
-        echo "$HOME/.terraform.d/plugins/registry.terraform.io/${org}/${provider}/${version_no_prefix}/${goos}_${goarch}"
+        registry_host="registry.terraform.io"
     fi
+    
+    # Construct the installation path
+    base_path="$HOME/.terraform.d/plugins"
+    install_path="${base_path}/${registry_host}/${org}/${provider_type}/${version_no_prefix}/${goos}_${goarch}"
+    
+    echo "$install_path"
 }
 
-# Get installation path using the checked out version
+# Get installation path using the checked out version identifier
 GOOS=$(go env GOOS)
 GOARCH=$(go env GOARCH)
 INSTALL_PATH=$(get_installation_paths "$GOOS" "$GOARCH" "$ORGANIZATION" "$PROVIDER_TYPE" "$CHECKED_OUT_VERSION")
 
 # Create directory and copy binary
+print_message "Preparing installation directory: $INSTALL_PATH"
 mkdir -p "$INSTALL_PATH"
+if [ $? -ne 0 ]; then
+    print_error "Failed to create installation directory: $INSTALL_PATH"
+    exit 1
+fi
+
+print_message "Installing binary to: $INSTALL_PATH/$OUTPUT_BINARY"
 cp "$OUTPUT_BINARY" "$INSTALL_PATH/"
 if [ $? -ne 0 ]; then
     print_error "Failed to copy binary to $INSTALL_PATH"
     exit 1
 fi
-print_message "Binary installed to: $INSTALL_PATH/$OUTPUT_BINARY"
+print_message "Binary successfully installed."
 
-# Clean up the original binary
+# Clean up the original binary from the temp build directory
 rm "$OUTPUT_BINARY"
 
 # Only print the configuration block if --print-configuration was provided
 if [ "$PRINT_CONFIG" = true ]; then
-    VERSION_NO_PREFIX=$(echo "$CHECKED_OUT_VERSION" | sed 's/^v//')
-    if [ "$SILENT" = false ]; then
-        if [ "$OPENTOFU_ONLY" = true ]; then
-            echo "To use this provider in your OpenTofu configuration, add the following block:"
-        else
-            echo "To use this provider in your Terraform configuration, add the following block:"
-        fi
+    # Use the version identifier determined earlier (tag or commit hash)
+    # Remove 'v' prefix if present for the configuration block
+    VERSION_FOR_CONFIG=$(echo "$CHECKED_OUT_VERSION" | sed 's/^v//')
+    
+    # Determine registry host based on flag
+    if [ "$OPENTOFU_ONLY" = true ]; then
+        REGISTRY_SOURCE="${ORGANIZATION}/${PROVIDER_TYPE}" # OpenTofu uses implicit registry host
+        CONFIG_TOOL_NAME="OpenTofu"
+    else
+        REGISTRY_SOURCE="registry.terraform.io/${ORGANIZATION}/${PROVIDER_TYPE}" # Terraform often needs explicit host
+        CONFIG_TOOL_NAME="Terraform"
     fi
-    echo "
-terraform {
-  required_providers {
-    $PROVIDER_TYPE = {
-      source = \"$ORGANIZATION/$PROVIDER_TYPE\"
-      version = \"$VERSION_NO_PREFIX\"
-    }
-  }
-}
-"
+
+    if [ "$SILENT" = false ]; then
+        echo # Add a newline for better formatting
+        echo "To use this provider in your $CONFIG_TOOL_NAME configuration, add the following block:"
+    fi
+    # Use printf for potentially cleaner multi-line output
+    printf "\nterraform {\n"
+    printf "  required_providers {\n"
+    printf "    %s = {\n" "$PROVIDER_TYPE"
+    printf "      source  = \"%s\"\n" "$REGISTRY_SOURCE"
+    printf "      version = \"%s\"\n" "$VERSION_FOR_CONFIG"
+    printf "    }\n"
+    printf "  }\n"
+    printf "}\n\n"
 fi
+
+# Cleanup is handled by the trap
+print_message "Operation completed successfully."

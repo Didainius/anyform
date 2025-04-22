@@ -132,6 +132,24 @@ terraform {
 }
 ```
 
+#### Example with OpenTofu flag
+
+```shell
+anyform --opentofu -p https://github.com/cloudflare/terraform-provider-cloudflare 24354ad
+# ... output similar to standard example ...
+Binary installed to: /Users/user/.terraform.d/plugins/registry.opentofu.org/cloudflare/cloudflare/4.45.0-13-g24354ad1e/darwin_arm64/terraform-provider-cloudflare_v4.45.0-13-g24354ad1e
+To use this provider in your OpenTofu configuration, add the following block:
+
+terraform {
+  required_providers {
+    cloudflare = {
+      source  = "cloudflare/cloudflare" # Note: OpenTofu uses implicit registry host
+      version = "4.45.0-13-g24354ad1e"
+    }
+  }
+}
+```
+
 ### Testing
 
 Tests are written using [Bats](https://github.com/bats-core/bats-core) (Bash Automated Testing System). To run the tests:
