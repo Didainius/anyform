@@ -20,11 +20,15 @@ OPENTOFU_ONLY=false
 
 # Function to print error messages
 print_error() {
+    # Print error message to stderr
+    # $1: The error message to display
     echo "Error: $1" >&2
 }
 
 # Function to cleanup temporary files
 cleanup() {
+    # Cleans up temporary resources when script exits
+    # No arguments expected
     local exit_code=$?
     # Only remove TEMP_DIR if it was set and is a directory
     if [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
@@ -62,6 +66,8 @@ fi
 
 # Function to check for latest version
 check_latest_version() {
+    # Fetches the latest version from GitHub releases
+    # Returns the version tag or non-zero exit code on failure
     local latest_version
     # Use default empty string if curl fails or returns nothing
     latest_version=$(curl -s https://api.github.com/repos/Didainius/anyform/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo "")
@@ -76,6 +82,10 @@ check_latest_version() {
 # Function to compare semantic versions
 # Returns 1 if version1 > version2, 0 if equal, -1 if version1 < version2
 compare_versions() {
+    # Compares two semantic version strings (e.g. v1.2.3)
+    # $1: First version to compare
+    # $2: Second version to compare
+    # Returns: 1 if $1 > $2, 0 if equal, -1 if $1 < $2
     local version1 version2
     local v1_major v1_minor v1_patch v2_major v2_minor v2_patch
     
@@ -117,6 +127,9 @@ compare_versions() {
 
 # Function to check if we have write permissions
 check_write_permissions() {
+    # Checks if we have appropriate permissions to write to a file or directory
+    # $1: Target path to check
+    # Returns: 0 if writable, 1 otherwise
     local target="$1"
     local target_dir
     target_dir=$(dirname "$target")
@@ -133,6 +146,9 @@ check_write_permissions() {
 
 # Function to perform self-update
 self_update() {
+    # Updates the script itself to the latest available version
+    # No arguments expected
+    # Returns: Exits with 0 on success, non-zero otherwise
     local latest_version compare_result current_script temp_file
     
     latest_version=$(check_latest_version)
@@ -194,6 +210,9 @@ self_update() {
 
 # Function to check if update is available
 check_update() {
+    # Checks if a newer version of the script is available
+    # No arguments expected
+    # Returns: Exits with 0 if up to date or update available, non-zero on error or warning
     local latest_version compare_result
     
     latest_version=$(check_latest_version)
@@ -221,6 +240,8 @@ check_update() {
 
 # Function to print usage
 print_usage() {
+    # Prints usage instructions for the script
+    # No arguments expected
     echo "Usage: $0 [--print-configuration | -p] [--version] [--self-update | -U] [--check-update] [--silent | -s] [--opentofu] <repository-address> [git-commit-version]"
     echo "Options:"
     echo "  --print-configuration, -p  Print the Terraform configuration block"
@@ -238,6 +259,8 @@ print_usage() {
 
 # Function to print messages unless in silent mode
 print_message() {
+    # Prints a message to stdout unless silent mode is enabled
+    # $1: Message to print
     if [ "$SILENT" = false ]; then
         echo "$1"
     fi
@@ -355,29 +378,35 @@ print_message "Cloning repository into temporary directory: $TEMP_DIR"
 
 # Clone repository
 if [ "$SILENT" = true ]; then
-    git clone --quiet "$REPO_ADDRESS" "$TEMP_DIR"
+    git clone --quiet "$REPO_ADDRESS" "$TEMP_DIR" || {
+        print_error "Failed to clone repository from $REPO_ADDRESS"
+        exit 1
+    }
 else
-    git clone "$REPO_ADDRESS" "$TEMP_DIR"
-fi
-if [ $? -ne 0 ]; then
-    print_error "Failed to clone repository from $REPO_ADDRESS"
-    # TEMP_DIR will be cleaned up by trap
-    exit 1
+    git clone "$REPO_ADDRESS" "$TEMP_DIR" || {
+        print_error "Failed to clone repository from $REPO_ADDRESS"
+        exit 1
+    }
 fi
 
 # Change to temp directory
-cd "$TEMP_DIR"
+cd "$TEMP_DIR" || {
+    print_error "Failed to change to temporary directory: $TEMP_DIR"
+    exit 1
+}
 
 # Fetch updates
 print_message "Fetching updates..."
 if [ "$SILENT" = true ]; then
-    git fetch --all --tags --quiet
+    git fetch --all --tags --quiet || {
+        print_error "Failed to fetch updates from repository"
+        exit 1
+    }
 else
-    git fetch --all --tags
-fi
-if [ $? -ne 0 ]; then
-    print_error "Failed to fetch updates from repository"
-    exit 1
+    git fetch --all --tags || {
+        print_error "Failed to fetch updates from repository"
+        exit 1
+    }
 fi
 
 # Handle PR checkout
@@ -444,26 +473,40 @@ if [ $? -ne 0 ]; then
 fi
 
 # Get a version tag for the build (use commit hash as fallback)
-# Use --exact-match to prefer the tag only if it points directly to the commit
-CHECKED_OUT_VERSION=$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)
+# Try different approaches to get a meaningful version identifier:
+# 1. First try exact tag match for the commit
+# 2. Then try to find the closest tag with git describe
+# 3. Fall back to the commit hash if no tags exist
+CHECKED_OUT_VERSION=$(git describe --tags --exact-match 2>/dev/null || 
+                      git describe --tags --always 2>/dev/null || 
+                      git rev-parse --short HEAD)
 print_message "Using version identifier for build: $CHECKED_OUT_VERSION"
 
 # Perform go build
 OUTPUT_BINARY="${PROVIDER_NAME}_${CHECKED_OUT_VERSION}"
 print_message "Building binary: $OUTPUT_BINARY"
 if [ "$SILENT" = true ]; then
-    go build -o "$OUTPUT_BINARY" >/dev/null 2>&1
+    go build -o "$OUTPUT_BINARY" >/dev/null 2>&1 || {
+        print_error "Go build failed. Check for build errors with: go build -o $OUTPUT_BINARY -v"
+        exit 1
+    }
 else
-    go build -o "$OUTPUT_BINARY"
-fi
-if [ $? -ne 0 ]; then
-    print_error "Go build failed"
-    exit 1
+    go build -o "$OUTPUT_BINARY" || {
+        print_error "Go build failed"
+        exit 1
+    }
 fi
 print_message "Build successful: $TEMP_DIR/$OUTPUT_BINARY"
 
 # Function to get installation paths
 get_installation_paths() {
+    # Determines the correct installation path for the provider binary
+    # $1: GOOS (operating system)
+    # $2: GOARCH (processor architecture) 
+    # $3: Organization name
+    # $4: Provider type
+    # $5: Version identifier
+    # Returns: The full installation path for the binary
     local goos=$1
     local goarch=$2
     local org=$3
