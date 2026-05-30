@@ -115,12 +115,15 @@ case "$1" in
         done
         if [ "$exact_match" = true ]; then
             # Succeed only if the test is specifically for a tagged version
-            if [[ "$BATS_TEST_NAME" == *"tagged version"* ]]; then
-                echo "v1.0.0"
-            else
-                # Instead of failing with exit 1, return empty to ensure fallback to abcd123
-                exit 1
-            fi
+            case "$BATS_TEST_NAME" in
+                *"tagged version"*)
+                    echo "v1.0.0"
+                    ;;
+                *)
+                    # Instead of failing with exit 1, return empty to ensure fallback to abcd123
+                    exit 1
+                    ;;
+            esac
         else 
             # For all non-exact-match describe calls, return abcd123 for consistent testing
             echo "abcd123"
