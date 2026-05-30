@@ -11,12 +11,20 @@ IS_PR=false
 PR_NUMBER=""
 
 # Version
-VERSION="v0.11.0"
+VERSION="v0.12.0"
 
 # Initialize flag variables
 PRINT_CONFIG=false
 SILENT=false
 OPENTOFU_ONLY=false
+BUILD_FLAGS=""
+BRANCH_NAME=""
+LIST_MODE=false
+CLEAN_MODE=false
+CLEAN_PROVIDER=""
+CLEAN_VERSION=""
+CLEAN_ALL=false
+FORCE=false
 
 # Function to print error messages
 print_error() {
@@ -238,19 +246,264 @@ check_update() {
 
 # --- Main Script Logic ---
 
+# Function to list installed provider binaries
+list_installed() {
+    local base_path="$HOME/.terraform.d/plugins"
+    local found=false
+
+    if [ ! -d "$base_path" ]; then
+        echo "No custom providers installed (plugin directory not found)."
+        return 0
+    fi
+
+    echo "Installed custom providers:"
+    echo
+
+    for registry_host in "registry.terraform.io" "registry.opentofu.org"; do
+        local reg_path="$base_path/$registry_host"
+        if [ ! -d "$reg_path" ]; then
+            continue
+        fi
+
+        echo "  $registry_host:"
+        local reg_has_entries=false
+
+        for org_dir in "$reg_path"/*/; do
+            [ -d "$org_dir" ] || continue
+            local org=$(basename "$org_dir")
+
+            for provider_dir in "$org_dir"/*/; do
+                [ -d "$provider_dir" ] || continue
+                local provider_type=$(basename "$provider_dir")
+
+                for version_dir in "$provider_dir"/*/; do
+                    [ -d "$version_dir" ] || continue
+                    local version=$(basename "$version_dir")
+
+                    for arch_dir in "$version_dir"/*/; do
+                        [ -d "$arch_dir" ] || continue
+                        local arch=$(basename "$arch_dir")
+
+                        local has_binaries=false
+                        for binary in "$arch_dir"/terraform-provider-*; do
+                            if [ -f "$binary" ]; then
+                                has_binaries=true
+                                break
+                            fi
+                        done
+
+                        if [ "$has_binaries" = true ]; then
+                            printf "    %s/%-28s %-28s %s\n" "$org" "$provider_type" "$version" "$arch"
+                            reg_has_entries=true
+                            found=true
+                        fi
+                    done
+                done
+            done
+        done
+
+        if [ "$reg_has_entries" = false ]; then
+            echo "    (none)"
+        fi
+        echo
+    done
+
+    if [ "$found" = false ]; then
+        echo "No custom providers installed."
+    fi
+}
+
+# Function to clean installed provider binaries
+clean_providers() {
+    local base_path="$HOME/.terraform.d/plugins"
+    local to_remove=()
+    local found=false
+
+    if [ ! -d "$base_path" ]; then
+        echo "No plugin directory found. Nothing to clean."
+        return 0
+    fi
+
+    if [ "$CLEAN_ALL" = true ]; then
+        echo "Will remove ALL custom providers from $base_path"
+        to_remove+=("$base_path")
+        found=true
+    elif [ -n "$CLEAN_PROVIDER" ]; then
+        for registry_host in "registry.terraform.io" "registry.opentofu.org"; do
+            local reg_path="$base_path/$registry_host"
+            [ -d "$reg_path" ] || continue
+
+            for org_dir in "$reg_path"/*/; do
+                [ -d "$org_dir" ] || continue
+                for provider_dir in "$org_dir"/*/; do
+                    [ -d "$provider_dir" ] || continue
+                    local ptype=$(basename "$provider_dir")
+
+                    if [ "$ptype" = "$CLEAN_PROVIDER" ]; then
+                        if [ -n "$CLEAN_VERSION" ]; then
+                            local version_path="$provider_dir/$CLEAN_VERSION"
+                            if [ -d "$version_path" ]; then
+                                echo "Will remove: $version_path"
+                                to_remove+=("$version_path")
+                                found=true
+                            fi
+                        else
+                            echo "Will remove: $provider_dir"
+                            to_remove+=("$provider_dir")
+                            found=true
+                        fi
+                    fi
+                done
+            done
+        done
+    else
+        print_error "--clean requires a provider name (e.g., --clean cloudflare)"
+        echo "Use --clean-all to remove all providers."
+        exit 1
+    fi
+
+    if [ "$found" = false ]; then
+        if [ "$CLEAN_ALL" = true ]; then
+            echo "Plugin directory is empty. Nothing to clean."
+        else
+            echo "Provider '$CLEAN_PROVIDER' not found in plugin directories."
+        fi
+        return 0
+    fi
+
+    if [ "$FORCE" != true ]; then
+        echo
+        read -r -p "Are you sure you want to remove these? [y/N] " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo "Aborted."
+            exit 0
+        fi
+    fi
+
+    for path in "${to_remove[@]}"; do
+        rm -rf "$path"
+        echo "Removed: $path"
+    done
+
+    echo "Cleanup complete."
+}
+
+# Function to output shell completion script
+print_completion() {
+    local shell="$1"
+
+    case "$shell" in
+        bash)
+            cat << 'COMPLETION_EOF'
+_anyform_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    case "$prev" in
+        --branch|-b)
+            return 0
+            ;;
+        --build-flags)
+            return 0
+            ;;
+        --completion)
+            COMPREPLY=( $(compgen -W "bash zsh fish" -- "${cur}") )
+            return 0
+            ;;
+        --clean|-c)
+            return 0
+            ;;
+        *)
+            ;;
+    esac
+
+    opts="--branch --build-flags --check-update --clean --clean-all --completion --force --help --list --opentofu --print-configuration --self-update --silent --version -b -c -f -l -p -s -U -h"
+    COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+    return 0
+}
+complete -F _anyform_completion anyform
+COMPLETION_EOF
+            ;;
+        zsh)
+            cat << 'COMPLETION_EOF'
+#compdef anyform
+
+_anyform() {
+    local -a args
+    args=(
+        '(--branch -b)'{--branch,-b}'[Install from a specific branch]:branch name:'
+        '--build-flags[Pass additional flags to go build]:flags:'
+        '--check-update[Check if a new version is available]'
+        '(--clean -c)'{--clean,-c}'[Remove installed providers]:provider name:'
+        '--clean-all[Remove all installed providers]'
+        '--completion[Generate shell completion script]:shell:(bash zsh fish)'
+        '(--force -f)'{--force,-f}'[Skip confirmation prompts]'
+        '(-h --help)'{-h,--help}'[Show help message]'
+        '(--list -l)'{--list,-l}'[List installed custom providers]'
+        '--opentofu[Install for OpenTofu only]'
+        '(-p --print-configuration)'{-p,--print-configuration}'[Print Terraform configuration block]'
+        '(-U --self-update)'{-U,--self-update}'[Update anyform to the latest version]'
+        '(-s --silent)'{-s,--silent}'[Run in silent mode]'
+        '--version[Print version information]'
+    )
+    _arguments $args
+}
+
+_anyform "$@"
+COMPLETION_EOF
+            ;;
+        fish)
+            cat << 'COMPLETION_EOF'
+complete -c anyform -s b -l branch -d 'Install from a specific branch' -r
+complete -c anyform -l build-flags -d 'Pass additional flags to go build' -r
+complete -c anyform -l check-update -d 'Check if a new version is available'
+complete -c anyform -s c -l clean -d 'Remove installed providers'
+complete -c anyform -l clean-all -d 'Remove all installed providers'
+complete -c anyform -l completion -d 'Generate shell completion script' -r -a 'bash zsh fish'
+complete -c anyform -s f -l force -d 'Skip confirmation prompts'
+complete -c anyform -s h -l help -d 'Show help message'
+complete -c anyform -s l -l list -d 'List installed custom providers'
+complete -c anyform -l opentofu -d 'Install for OpenTofu only'
+complete -c anyform -s p -l print-configuration -d 'Print Terraform configuration block'
+complete -c anyform -s U -l self-update -d 'Update anyform to the latest version'
+complete -c anyform -s s -l silent -d 'Run in silent mode'
+complete -c anyform -l version -d 'Print version information'
+COMPLETION_EOF
+            ;;
+        *)
+            print_error "Unknown shell: $shell"
+            echo "Supported shells: bash, zsh, fish"
+            exit 1
+            ;;
+    esac
+}
+
 # Function to print usage
 print_usage() {
-    # Prints usage instructions for the script
-    # No arguments expected
-    echo "Usage: $0 [--print-configuration | -p] [--version] [--self-update | -U] [--check-update] [--silent | -s] [--opentofu] <repository-address> [git-commit-version]"
+    echo "Usage: $0 [flags] <repository-address> [git-commit-version]"
+    echo ""
+    echo "Build & Install:"
+    echo "  <repository-address>                         GitHub repo URL"
+    echo "  [git-commit-version]                         Specific commit hash or tag"
+    echo ""
     echo "Options:"
-    echo "  --print-configuration, -p  Print the Terraform configuration block"
-    echo "  --version                  Print version information"
-    echo "  --self-update, -U          Update anyform to the latest version"
-    echo "  --check-update             Check if a new version is available"
-    echo "  --silent, -s               Run in silent mode (no output except errors)"
-    echo "  --opentofu                 Install for OpenTofu only (skip Terraform)"
-    echo "  -h, --help                 Show this help message"
+    echo "  --build-flags <flags>                        Pass additional flags to go build"
+    echo "  --branch, -b <name>                          Use a specific branch (instead of default)"
+    echo "  --check-update                               Check if a new version is available"
+    echo "  --clean, -c <provider> [version]              Remove installed provider(s)"
+    echo "  --clean-all                                  Remove all installed providers"
+    echo "  --completion <bash|zsh|fish>                 Generate shell completion script"
+    echo "  --force, -f                                  Skip confirmation prompts"
+    echo "  -h, --help                                   Show this help message"
+    echo "  --list, -l                                   List installed custom providers"
+    echo "  --opentofu                                   Install for OpenTofu only (skip Terraform)"
+    echo "  --print-configuration, -p                    Print the Terraform configuration block"
+    echo "  --self-update, -U                            Update anyform to the latest version"
+    echo "  --silent, -s                                 Run in silent mode (no output except errors)"
+    echo "  --version                                     Print version information"
+    echo ""
     echo "Note: Repository address can be:"
     echo "  - Repository URL: https://github.com/<organization>/terraform-provider-<name>"
     echo "  - Pull Request URL: https://github.com/<organization>/terraform-provider-<name>/pull/<number>"
@@ -299,6 +552,61 @@ while [ "$#" -gt 0 ]; do
             OPENTOFU_ONLY=true
             shift
             ;;
+        --build-flags)
+            shift
+            if [ "$#" -gt 0 ]; then
+                BUILD_FLAGS="$1"
+                shift
+            else
+                print_error "--build-flags requires a value"
+                exit 1
+            fi
+            ;;
+        --branch|-b)
+            shift
+            if [ "$#" -gt 0 ]; then
+                BRANCH_NAME="$1"
+                shift
+            else
+                print_error "--branch requires a branch name"
+                exit 1
+            fi
+            ;;
+        --list|-l)
+            LIST_MODE=true
+            shift
+            ;;
+        --clean|-c)
+            CLEAN_MODE=true
+            shift
+            while [ "$#" -gt 0 ] && [[ ! "$1" =~ ^- ]]; do
+                if [ -z "$CLEAN_PROVIDER" ]; then
+                    CLEAN_PROVIDER="$1"
+                elif [ -z "$CLEAN_VERSION" ]; then
+                    CLEAN_VERSION="$1"
+                    break
+                fi
+                shift
+            done
+            ;;
+        --clean-all)
+            CLEAN_ALL=true
+            shift
+            ;;
+        --force|-f)
+            FORCE=true
+            shift
+            ;;
+        --completion)
+            shift
+            if [ "$#" -gt 0 ]; then
+                print_completion "$1"
+                exit 0
+            else
+                print_error "--completion requires a shell type: bash, zsh, or fish"
+                exit 1
+            fi
+            ;;
         -h|--help)
             print_usage
             exit 0
@@ -316,6 +624,17 @@ while [ "$#" -gt 0 ]; do
             ;;
     esac
 done
+
+# Handle list and clean operations (standalone, no repo required)
+if [ "$LIST_MODE" = true ]; then
+    list_installed
+    exit 0
+fi
+
+if [ "$CLEAN_MODE" = true ] || [ "$CLEAN_ALL" = true ]; then
+    clean_providers
+    exit 0
+fi
 
 # Validate required arguments
 if [ -z "$REPO_ADDRESS" ]; then
@@ -431,27 +750,43 @@ fi
 
 # Determine commit version if not specified
 if [ -z "$COMMIT_VERSION" ]; then
-    print_message "No commit version specified, determining latest commit from default branch..."
-    # Get default branch name
-    DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
-    if [ -z "$DEFAULT_BRANCH" ]; then
-        print_error "Could not determine the default branch for the repository."
-        exit 1
-    fi
-    print_message "Default branch identified as: $DEFAULT_BRANCH"
-    # Ensure the default branch is up-to-date locally
-    if [ "$SILENT" = true ]; then
-        git fetch --quiet origin "$DEFAULT_BRANCH"
+    if [ -n "$BRANCH_NAME" ]; then
+        print_message "Using specified branch: $BRANCH_NAME"
+        # Fetch the specified branch
+        if [ "$SILENT" = true ]; then
+            git fetch --quiet origin "$BRANCH_NAME"
+        else
+            git fetch origin "$BRANCH_NAME"
+        fi
+        COMMIT_VERSION=$(git rev-parse "origin/$BRANCH_NAME")
+        if [ -z "$COMMIT_VERSION" ]; then
+            print_error "Could not determine the latest commit for branch $BRANCH_NAME."
+            exit 1
+        fi
+        print_message "Using latest commit from $BRANCH_NAME: $COMMIT_VERSION"
     else
-        git fetch origin "$DEFAULT_BRANCH"
+        print_message "No commit version specified, determining latest commit from default branch..."
+        # Get default branch name
+        DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
+        if [ -z "$DEFAULT_BRANCH" ]; then
+            print_error "Could not determine the default branch for the repository."
+            exit 1
+        fi
+        print_message "Default branch identified as: $DEFAULT_BRANCH"
+        # Ensure the default branch is up-to-date locally
+        if [ "$SILENT" = true ]; then
+            git fetch --quiet origin "$DEFAULT_BRANCH"
+        else
+            git fetch origin "$DEFAULT_BRANCH"
+        fi
+        # Get the latest commit hash from the default branch
+        COMMIT_VERSION=$(git rev-parse "origin/$DEFAULT_BRANCH")
+        if [ -z "$COMMIT_VERSION" ]; then
+            print_error "Could not determine the latest commit for branch $DEFAULT_BRANCH."
+            exit 1
+        fi
+        print_message "Using latest commit from $DEFAULT_BRANCH: $COMMIT_VERSION"
     fi
-    # Get the latest commit hash from the default branch
-    COMMIT_VERSION=$(git rev-parse "origin/$DEFAULT_BRANCH")
-    if [ -z "$COMMIT_VERSION" ]; then
-        print_error "Could not determine the latest commit for branch $DEFAULT_BRANCH."
-        exit 1
-    fi
-    print_message "Using latest commit from $DEFAULT_BRANCH: $COMMIT_VERSION"
 fi
 
 # Verify the commit/ref exists before checkout
@@ -485,13 +820,16 @@ print_message "Using version identifier for build: $CHECKED_OUT_VERSION"
 # Perform go build
 OUTPUT_BINARY="${PROVIDER_NAME}_${CHECKED_OUT_VERSION}"
 print_message "Building binary: $OUTPUT_BINARY"
+if [ -n "$BUILD_FLAGS" ]; then
+    print_message "Build flags: $BUILD_FLAGS"
+fi
 if [ "$SILENT" = true ]; then
-    go build -o "$OUTPUT_BINARY" >/dev/null 2>&1 || {
-        print_error "Go build failed. Check for build errors with: go build -o $OUTPUT_BINARY -v"
+    go build $BUILD_FLAGS -o "$OUTPUT_BINARY" >/dev/null 2>&1 || {
+        print_error "Go build failed. Check for build errors with: go build $BUILD_FLAGS -o $OUTPUT_BINARY -v"
         exit 1
     }
 else
-    go build -o "$OUTPUT_BINARY" || {
+    go build $BUILD_FLAGS -o "$OUTPUT_BINARY" || {
         print_error "Go build failed"
         exit 1
     }

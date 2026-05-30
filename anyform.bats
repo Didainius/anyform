@@ -429,3 +429,178 @@ get_version() {
     chmod +x "${MOCK_BIN_DIR}/go" 
     PATH="$original_path"
 }
+
+# Test --branch flag: uses specified branch instead of default branch
+@test "handles --branch flag with valid branch name" {
+    run "$SCRIPT_PATH" --branch feature-branch "${MOCK_REPO}"
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Using specified branch: feature-branch" ]]
+    [[ "${output}" =~ "Using latest commit from feature-branch: abcd123" ]]
+    [[ "${output}" =~ "Installing binary to:" ]]
+}
+
+# Test --branch flag missing argument
+@test "fails when --branch is missing branch name" {
+    run "$SCRIPT_PATH" --branch "${MOCK_REPO}"
+    [ "$status" -eq 1 ]
+
+    run "$SCRIPT_PATH" -b "${MOCK_REPO}"
+    [ "$status" -eq 1 ]
+}
+
+# Test --build-flags are passed to go build
+@test "passes build flags to go build" {
+    # Create a mock go that captures build flags
+    cat > "${MOCK_BIN_DIR}/go" << 'EOF'
+#!/bin/sh
+case "$1" in
+    build)
+        # Capture args to a file so we can verify
+        echo "$@" > /tmp/anyform_test_go_args
+        shift
+        while [ $# -gt 0 ]; do
+            if [ "$1" = "-o" ]; then
+                touch "./$2"
+                shift 2
+                break
+            fi
+            shift
+        done
+        ;;
+    env)
+        case "$2" in
+            "GOOS") echo "darwin" ;;
+            "GOARCH") echo "amd64" ;;
+        esac
+        ;;
+esac
+exit 0
+EOF
+    chmod +x "${MOCK_BIN_DIR}/go"
+
+    run "$SCRIPT_PATH" --build-flags "-ldflags=-X main.version=custom" "${MOCK_REPO}"
+    [ "$status" -eq 0 ]
+    [[ "$(cat /tmp/anyform_test_go_args)" =~ "-ldflags=-X" ]]
+    rm -f /tmp/anyform_test_go_args
+}
+
+# Test --list with empty plugin directory
+@test "lists installed providers when none installed" {
+    # Override HOME to use a temp directory
+    HOME="$TEST_TEMP_DIR"
+    export HOME
+
+    run "$SCRIPT_PATH" --list
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "No custom providers installed" ]]
+}
+
+# Test --list with mock installed providers
+@test "lists installed providers with mock providers" {
+    # Create mock plugin directory structure
+    PLUGIN_BASE="${TEST_TEMP_DIR}/.terraform.d/plugins"
+    mkdir -p "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0/darwin_amd64"
+    touch "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0/darwin_amd64/terraform-provider-corner_v1.0.0"
+
+    HOME="$TEST_TEMP_DIR"
+    export HOME
+
+    run "$SCRIPT_PATH" --list
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "corner" ]]
+    [[ "${output}" =~ "v1.0.0" ]]
+    [[ "${output}" =~ "darwin_amd64" ]]
+}
+
+# Test --clean without provider name
+@test "fails when --clean is missing provider name" {
+    run "$SCRIPT_PATH" --clean
+    [ "$status" -eq 1 ]
+}
+
+# Test --clean with non-existent provider
+@test "reports when provider to clean is not found" {
+    HOME="$TEST_TEMP_DIR"
+    export HOME
+    mkdir -p "${TEST_TEMP_DIR}/.terraform.d/plugins"
+
+    run "$SCRIPT_PATH" --clean nonexistent
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "not found" ]]
+}
+
+# Test --clean with a provider and --force
+@test "cleans installed provider with --force" {
+    PLUGIN_BASE="${TEST_TEMP_DIR}/.terraform.d/plugins"
+    mkdir -p "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0/darwin_amd64"
+    touch "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0/darwin_amd64/terraform-provider-corner_v1.0.0"
+
+    HOME="$TEST_TEMP_DIR"
+    export HOME
+
+    run "$SCRIPT_PATH" --clean corner --force
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Removed:" ]]
+    [ ! -d "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner" ]
+}
+
+# Test --clean-all with --force
+@test "cleans all providers with --clean-all --force" {
+    PLUGIN_BASE="${TEST_TEMP_DIR}/.terraform.d/plugins"
+    mkdir -p "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0/darwin_amd64"
+    touch "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0/darwin_amd64/terraform-provider-corner_v1.0.0"
+
+    HOME="$TEST_TEMP_DIR"
+    export HOME
+
+    run "$SCRIPT_PATH" --clean-all --force
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Removed:" ]]
+    [ ! -d "${PLUGIN_BASE}" ]
+}
+
+# Test --completion generates bash completion
+@test "generates bash completion script" {
+    run "$SCRIPT_PATH" --completion bash
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "complete -F _anyform_completion anyform" ]]
+}
+
+# Test --completion generates zsh completion
+@test "generates zsh completion script" {
+    run "$SCRIPT_PATH" --completion zsh
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "#compdef anyform" ]]
+}
+
+# Test --completion generates fish completion
+@test "generates fish completion script" {
+    run "$SCRIPT_PATH" --completion fish
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "complete -c anyform" ]]
+}
+
+# Test --completion with invalid shell
+@test "fails with unsupported completion shell" {
+    run "$SCRIPT_PATH" --completion invalid
+    [ "$status" -eq 1 ]
+}
+
+# Test --completion without shell name
+@test "fails when --completion is missing shell name" {
+    run "$SCRIPT_PATH" --completion
+    [ "$status" -eq 1 ]
+}
+
+# Test updated help output includes new flags
+@test "help output includes new flags" {
+    run "$SCRIPT_PATH" --help
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "--branch" ]]
+    [[ "${output}" =~ "--build-flags" ]]
+    [[ "${output}" =~ "--clean" ]]
+    [[ "${output}" =~ "--clean-all" ]]
+    [[ "${output}" =~ "--completion" ]]
+    [[ "${output}" =~ "--force" ]]
+    [[ "${output}" =~ "--list" ]]
+}
