@@ -380,54 +380,51 @@ get_version() {
 
 # Test dependency check: git is required
 @test "fails when git is not installed" {
-    # Temporarily set PATH to exclude git
-    original_path="$PATH"
-    # Create a temporary empty bin dir
-    temp_bin="$(mktemp -d)"
-    PATH="$temp_bin:/usr/bin:/bin" # Ensure no git is found
+    # Override command -v to pretend git is not found
+    command() {
+        if [ "$1" = "-v" ] && [ "$2" = "git" ]; then
+            return 1
+        fi
+        builtin command "$@"
+    }
+    export -f command
 
     run "$SCRIPT_PATH" "${MOCK_REPO}"
-    [ "$status" -eq 1 ] # Should fail with status 1
+    [ "$status" -eq 1 ]
     [[ "${output}" =~ "Error: git is not installed. Please install git and try again." ]]
-
-    # Restore PATH and cleanup
-    PATH="$original_path"
-    rm -rf "$temp_bin"
 }
 
 # Test dependency check: curl is required
 @test "fails when curl is not installed" {
-    # Replace mock curl with one that exits with command not found error
-    mv "${MOCK_BIN_DIR}/curl" "${MOCK_BIN_DIR}/curl_backup"
-    echo -e '#!/bin/sh\nexit 127' > "${MOCK_BIN_DIR}/curl"
-    chmod +x "${MOCK_BIN_DIR}/curl"
+    # Override command -v to pretend curl is not found
+    command() {
+        if [ "$1" = "-v" ] && [ "$2" = "curl" ]; then
+            return 1
+        fi
+        builtin command "$@"
+    }
+    export -f command
 
     run "$SCRIPT_PATH" --self-update
 
     [ "$status" -eq 1 ]
     [[ "${output}" =~ "Error: curl is not installed. Please install curl to continue." ]]
-
-    # Restore original mock curl
-    rm "${MOCK_BIN_DIR}/curl"
-    mv "${MOCK_BIN_DIR}/curl_backup" "${MOCK_BIN_DIR}/curl"
 }
 
 # Test dependency check: go is required
 @test "fails when go is not installed" {
-    # Temporarily set PATH to exclude go, but include mock git/curl
-    original_path="$PATH"
-    # Keep mock git/curl, but exclude go
-    PATH="${MOCK_BIN_DIR}:/usr/bin:/bin" 
-    # Ensure mock go is not executable
-    chmod -x "${MOCK_BIN_DIR}/go" 
+    # Override command -v to pretend go is not found
+    command() {
+        if [ "$1" = "-v" ] && [ "$2" = "go" ]; then
+            return 1
+        fi
+        builtin command "$@"
+    }
+    export -f command
 
     run "$SCRIPT_PATH" "${MOCK_REPO}"
-    [ "$status" -eq 1 ] # Should fail with status 1
+    [ "$status" -eq 1 ]
     [[ "${output}" =~ "Go is not installed. Please install Go and try again." ]]
-
-    # Restore PATH and permissions
-    chmod +x "${MOCK_BIN_DIR}/go" 
-    PATH="$original_path"
 }
 
 # Test --branch flag: uses specified branch instead of default branch

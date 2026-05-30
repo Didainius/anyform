@@ -790,7 +790,11 @@ if [ -z "$COMMIT_VERSION" ]; then
 fi
 
 # Verify the commit/ref exists before checkout
-if ! git rev-parse --quiet --verify "$COMMIT_VERSION^{commit}" >/dev/null; then
+set +e
+git rev-parse --verify "$COMMIT_VERSION^{commit}" >/dev/null 2>&1
+GIT_VERIFY_EXIT=$?
+set -e
+if [ "$GIT_VERIFY_EXIT" -ne 0 ]; then
     print_error "Failed to verify commit/ref: $COMMIT_VERSION"
     exit 1
 fi
