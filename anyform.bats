@@ -67,17 +67,18 @@ case "$1" in
         
         if [ "$verify" = true ]; then
             # Fail verification for the specific test commit 'abc123'
-            if [[ "$ref" == *"abc123^{commit}"* ]]; then 
-                # echo "Mock Git: Failing verification for $ref" >&2
-                exit 1
-            else
-                # echo "Mock Git: Passing verification for $ref" >&2
-                exit 0 # Succeed verification for others
-            fi
+            case "$ref" in
+                *"abc123^{commit}"*)
+                    exit 1
+                    ;;
+                *)
+                    exit 0 # Succeed verification for others
+                    ;;
+            esac
         elif [ "$short" = true ] && [ "$ref" = "HEAD" ]; then
             # Handle git rev-parse --short HEAD - always return abcd123 for consistent testing
             echo "abcd123"
-        elif [[ "$ref" == origin/* ]]; then 
+        elif case "$ref" in origin/*) true ;; *) false ;; esac; then 
              # Simulate getting commit hash for a remote branch - always return abcd123 for consistent testing
              echo "abcd123"
         elif [ -n "$ref" ]; then
