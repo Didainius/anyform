@@ -10,8 +10,8 @@
 
 ## AnyForm - Any Terraform Provider version from source
 
-A simple tool that installs any Terraform Provider straight from source. You can choose either the
-latest version or any specific commit.
+A simple tool that installs any Terraform Provider straight from source. Supports specific commits,
+branches, tags, and pull requests — for both Terraform and OpenTofu.
 
 ### Prerequisites
 
@@ -19,11 +19,24 @@ latest version or any specific commit.
 
 ### Installation
 
-You can install AnyForm directly using curl:
-
 ```shell
 sudo curl -L https://github.com/Didainius/anyform/releases/latest/download/anyform -o /usr/local/bin/anyform
 sudo chmod 755 /usr/local/bin/anyform
+```
+
+### Shell Completions
+
+AnyForm can generate tab-completion scripts for bash, zsh, and fish:
+
+```shell
+# Bash
+anyform --completion bash | sudo tee /usr/local/share/bash-completion/completions/anyform
+
+# Zsh
+anyform --completion zsh > ~/.zfunc/_anyform
+
+# Fish
+anyform --completion fish > ~/.config/fish/completions/anyform.fish
 ```
 
 ### Use cases
@@ -31,154 +44,139 @@ sudo chmod 755 /usr/local/bin/anyform
 * Perfect for development and testing purposes
 * Validate specific bug fixes before official releases
 * Access the latest provider features and improvements immediately
+* Test provider changes from any branch or pull request
 
 
 ### Usage
 
 ```shell
 anyform --help
-Usage: ./anyform [--print-configuration | -p] [--version] [--self-update | -U] [--check-update] [--silent | -s] [--opentofu] <repository-address> [git-commit-version]
+Usage: ./anyform [flags] <repository-address> [git-commit-version]
+
+Build & Install:
+  <repository-address>                         GitHub repo URL
+  [git-commit-version]                         Specific commit hash or tag
+
 Options:
-  --print-configuration, -p  Print the Terraform configuration block
-  --version                  Print version information
-  --self-update, -U          Update anyform to the latest version
-  --check-update             Check if a new version is available
-  --silent, -s               Run in silent mode (no output except errors)
-  --opentofu                 Install for OpenTofu only (skip Terraform)
-  -h, --help                 Show this help message
+  --build-flags <flags>                        Pass additional flags to go build
+  --branch, -b <name>                          Use a specific branch (instead of default)
+  --check-update                               Check if a new version is available
+  --clean, -c <provider> [version]              Remove installed provider(s)
+  --clean-all                                  Remove all installed providers
+  --completion <bash|zsh|fish>                 Generate shell completion script
+  --force, -f                                  Skip confirmation prompts
+  -h, --help                                   Show this help message
+  --list, -l                                   List installed custom providers
+  --opentofu                                   Install for OpenTofu only (skip Terraform)
+  --print-configuration, -p                    Print the Terraform configuration block
+  --self-update, -U                            Update anyform to the latest version
+  --silent, -s                                 Run in silent mode (no output except errors)
+  --version                                     Print version information
+
 Note: Repository address can be:
   - Repository URL: https://github.com/<organization>/terraform-provider-<name>
   - Pull Request URL: https://github.com/<organization>/terraform-provider-<name>/pull/<number>
 If git-commit-version is not specified, the latest commit from default branch or PR will be used
 ```
 
-#### Example
+### Examples
+
+#### Install from a specific commit
 
 ```shell
 anyform -p https://github.com/cloudflare/terraform-provider-cloudflare 24354ad
-Organization: cloudflare
-Provider Name: terraform-provider-cloudflare
-Provider Type: cloudflare
-Repository Address: https://github.com/cloudflare/terraform-provider-cloudflare
-Git Commit Version: 24354ad
-Cloning into '/tmp/terraform-provider-cloudflare'...
-remote: Enumerating objects: 94668, done.
-remote: Counting objects: 100% (2096/2096), done.
-remote: Compressing objects: 100% (683/683), done.
-remote: Total 94668 (delta 1459), reused 1979 (delta 1405), pack-reused 92572 (from 1)
-Receiving objects: 100% (94668/94668), 58.59 MiB | 22.11 MiB/s, done.
-Resolving deltas: 100% (69288/69288), done.
-Note: switching to '24354ad'.
-
-You are in 'detached HEAD' state. You can look around, make experimental
-changes and commit them, and you can discard any commits you make in this
-state without impacting any branches by switching back to a branch.
-
-If you want to create a new branch to retain commits you create, you may
-do so (now or later) by using -c with the switch command. Example:
-
-  git switch -c <new-branch-name>
-
-Or undo this operation with:
-
-  git switch -
-
-Turn off this advice by setting config variable advice.detachedHead to false
-
-HEAD is now at 24354ad1e allow 120m to run the tests
-Checked out version: v4.45.0-13-g24354ad1e
-Binary installed to: /Users/user/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.45.0-13-g24354ad1e/darwin_arm64/terraform-provider-cloudflare_v4.45.0-13-g24354ad1e
-To use this provider in your Terraform configuration, add the following block:
-
-terraform {
-  required_providers {
-    cloudflare = {
-      source = "cloudflare/cloudflare"
-      version = "4.45.0-13-g24354ad1e"
-    }
-  }
-}
 ```
 
-#### Example with PR URL
+Installs the provider built from commit `24354ad` and prints the config block.
+
+#### Install from a branch
 
 ```shell
-./anyform -p https://github.com/cloudflare/terraform-provider-cloudflare/pull/4414
-Organization: cloudflare
-Provider Name: terraform-provider-cloudflare
-Provider Type: cloudflare
-Repository Address: https://github.com/cloudflare/terraform-provider-cloudflare
-Fetching Pull Request #4414
-remote: Enumerating objects: 18, done.
-remote: Counting objects: 100% (14/14), done.
-remote: Total 18 (delta 14), reused 14 (delta 14), pack-reused 4 (from 1)
-Unpacking objects: 100% (18/18), 3.35 KiB | 163.00 KiB/s, done.
-From https://github.com/cloudflare/terraform-provider-cloudflare
- * [new ref]             refs/pull/4414/head -> pr-4414
-Previous HEAD position was 24354ad1e allow 120m to run the tests
-Switched to branch 'pr-4414'
-Checked out version: v4.44.0-14-gc4a40be72
-go: downloading github.com/hashicorp/terraform-plugin-framework-validators v0.14.0
-Binary installed to: /Users/user/.terraform.d/plugins/registry.terraform.io/cloudflare/cloudflare/4.44.0-14-gc4a40be72/darwin_arm64/terraform-provider-cloudflare_v4.44.0-14-gc4a40be72
-To use this provider in your Terraform configuration, add the following block:
-
-terraform {
-  required_providers {
-    cloudflare = {
-      source = "cloudflare/cloudflare"
-      version = "4.44.0-14-gc4a40be72"
-    }
-  }
-}
+anyform --branch feature-branch https://github.com/hashicorp/terraform-provider-aws
 ```
 
-#### Example with OpenTofu flag
+Checks out the latest commit on `feature-branch` instead of the default branch.
+
+#### Pass custom build flags
 
 ```shell
-anyform --opentofu -p https://github.com/cloudflare/terraform-provider-cloudflare 24354ad
-# ... output similar to standard example ...
-Binary installed to: /Users/user/.terraform.d/plugins/registry.opentofu.org/cloudflare/cloudflare/4.45.0-13-g24354ad1e/darwin_arm64/terraform-provider-cloudflare_v4.45.0-13-g24354ad1e
-To use this provider in your OpenTofu configuration, add the following block:
+anyform --build-flags='-ldflags="-X main.version=custom"' https://github.com/cloudflare/terraform-provider-cloudflare
+```
 
-terraform {
-  required_providers {
-    cloudflare = {
-      source  = "cloudflare/cloudflare" # Note: OpenTofu uses implicit registry host
-      version = "4.45.0-13-g24354ad1e"
-    }
-  }
-}
+Passes custom linker flags to `go build` for version injection or other build-time customization.
+
+#### Install from a Pull Request
+
+```shell
+anyform -p https://github.com/cloudflare/terraform-provider-cloudflare/pull/4414
+```
+
+Fetches and builds the PR head. You can also specify a specific commit on the PR branch.
+
+#### OpenTofu only
+
+```shell
+anyform --opentofu -p https://github.com/cloudflare/terraform-provider-cloudflare
+```
+
+Installs the provider to the OpenTofu registry path (`registry.opentofu.org`) instead of
+the Terraform registry path, and prints an OpenTofu-compatible config block.
+
+#### List installed providers
+
+```shell
+anyform --list
+```
+
+```
+Installed custom providers:
+
+  registry.terraform.io:
+    cloudflare/cloudflare     4.45.0-13-g24354ad1e      darwin_arm64
+    hashicorp/aws             5.0.0-3-gabcdef1           darwin_arm64
+
+  registry.opentofu.org:
+    cloudflare/cloudflare     4.45.0-13-g24354ad1e      darwin_arm64
+```
+
+#### Remove installed providers
+
+```shell
+# Remove all versions of a specific provider
+anyform --clean cloudflare --force
+
+# Remove a specific version only
+anyform --clean cloudflare v4.45.0-13-g24354ad1e --force
+
+# Remove everything (will prompt for confirmation)
+anyform --clean-all
+```
+
+#### Update AnyForm itself
+
+```shell
+# Check for updates
+anyform --check-update
+
+# Update to latest
+anyform --self-update
 ```
 
 ### Testing
 
-Tests are written using [Bats](https://github.com/bats-core/bats-core) (Bash Automated Testing System). To run the tests:
+Tests are written using [Bats](https://github.com/bats-core/bats-core) (Bash Automated Testing System).
+The suite contains 39 tests covering core functionality, error handling, and all features.
 
-1. Install Bats:
-   ```shell
-   # On macOS
-   brew install bats-core
+```shell
+# On macOS
+brew install bats-core
 
-   # On Ubuntu/Debian
-   apt-get install bats
+# On Ubuntu/Debian
+apt-get install bats
 
-   # Using npm
-   npm install -g bats
-   ```
-
-2. Make the test file executable:
-   ```shell
-   chmod +x anyform.bats
-   ```
-
-3. Run the tests:
-   ```shell
-   bats anyform.bats
-   ```
-
-The test suite covers basic functionality, error handling, and various input scenarios.
+bats anyform.bats
+```
 
 ### License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-

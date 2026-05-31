@@ -605,3 +605,187 @@ EOF
     [[ "${output}" =~ "--force" ]]
     [[ "${output}" =~ "--list" ]]
 }
+
+# Test silent mode: suppresses progress output
+@test "silent mode suppresses progress messages" {
+    run "$SCRIPT_PATH" --silent "${MOCK_REPO}"
+    [ "$status" -eq 0 ]
+    ! [[ "${output}" =~ "Organization:" ]]
+    ! [[ "${output}" =~ "Provider Name:" ]]
+    ! [[ "${output}" =~ "Building binary:" ]]
+}
+
+# Test silent mode: errors still appear
+@test "silent mode still shows errors" {
+    run "$SCRIPT_PATH" --silent "${MOCK_REPO}" "abc123"
+    [ "$status" -eq 1 ]
+    [[ "${output}" =~ "Error:" ]]
+}
+
+# Test OpenTofu: installs to OpenTofu registry path
+@test "opentofu flag uses opentofu registry path" {
+    run "$SCRIPT_PATH" --opentofu "${MOCK_REPO}"
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "registry.opentofu.org" ]]
+}
+
+# Test OpenTofu: generates OpenTofu config block format
+@test "opentofu flag generates OpenTofu config block" {
+    run "$SCRIPT_PATH" --opentofu -p "${MOCK_REPO}"
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "OpenTofu" ]]
+    [[ "${output}" =~ "source  = \"hashicorp/corner\"" ]]
+}
+
+# Test git clone failure
+@test "fails when git clone fails" {
+    cat > "${MOCK_BIN_DIR}/git" << 'EOF'
+#!/bin/sh
+case "$1" in
+    clone)
+        echo "Mock Git: Clone failed" >&2
+        exit 1
+        ;;
+    *)
+        exit 0
+        ;;
+esac
+exit 0
+EOF
+    chmod +x "${MOCK_BIN_DIR}/git"
+
+    run "$SCRIPT_PATH" "${MOCK_REPO}"
+    [ "$status" -eq 1 ]
+    [[ "${output}" =~ "Failed to clone repository" ]]
+}
+
+# Test go build failure
+@test "fails when go build fails" {
+    cat > "${MOCK_BIN_DIR}/go" << 'EOF'
+#!/bin/sh
+case "$1" in
+    build)
+        echo "Mock Go: Build failed" >&2
+        exit 1
+        ;;
+    env)
+        case "$2" in
+            "GOOS") echo "darwin" ;;
+            "GOARCH") echo "amd64" ;;
+        esac
+        ;;
+esac
+exit 0
+EOF
+    chmod +x "${MOCK_BIN_DIR}/go"
+
+    run "$SCRIPT_PATH" "${MOCK_REPO}"
+    [ "$status" -eq 1 ]
+    [[ "${output}" =~ "Go build failed" ]]
+}
+
+# Test --branch with non-existent branch
+@test "fails when --branch specifies non-existent branch" {
+    cat > "${MOCK_BIN_DIR}/git" << 'GITEOF'
+#!/bin/sh
+case "$1" in
+    clone)
+        target_dir=""
+        shift
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --quiet) shift ;;
+                *)
+                    if [ -z "$target_dir" ]; then target_dir="$1"; fi
+                    shift ;;
+            esac
+        done
+        [ -n "$target_dir" ] && mkdir -p "$target_dir/.git"
+        ;;
+    fetch)
+        if echo "$*" | grep -q "no-such-branch"; then
+            echo "fatal: couldn't find remote ref no-such-branch" >&2
+            exit 1
+        fi
+        echo "Mock Git: Fetching... ($*)" >&2
+        ;;
+    rev-parse)
+        shift
+        ref=""
+        short=false
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --short) short=true; shift ;;
+                *) ref="$1"; shift ;;
+            esac
+        done
+        if echo "$ref" | grep -q "no-such-branch"; then
+            exit 1
+        fi
+        echo "abcd123"
+        ;;
+    checkout) exit 0 ;;
+    describe) echo "abcd123" ;;
+    remote)
+        echo "HEAD branch: main"
+        ;;
+    *) exit 0 ;;
+esac
+exit 0
+GITEOF
+    chmod +x "${MOCK_BIN_DIR}/git"
+
+    run "$SCRIPT_PATH" --branch no-such-branch "${MOCK_REPO}"
+    [ "$status" -eq 1 ]
+}
+
+# Test --self-update when an update is available
+@test "performs self-update when new version is available" {
+    VERSION=$(get_version)
+    TEMP_SCRIPT="${TEST_TEMP_DIR}/anyform_update_test"
+    cp "$SCRIPT_PATH" "$TEMP_SCRIPT"
+    chmod +x "$TEMP_SCRIPT"
+
+    function curl() {
+        if [[ "$*" == *"api.github.com"* ]]; then
+            echo '{"tag_name": "v99.99.99"}'
+        elif [[ "$*" == *"releases/latest/download"* ]]; then
+            cat "$TEMP_SCRIPT"
+        fi
+    }
+    export -f curl
+
+    function command() {
+        if [ "$1" = "-v" ] && [ "$2" = "anyform" ]; then
+            echo "$TEMP_SCRIPT"
+            return 0
+        fi
+        builtin command "$@"
+    }
+    export -f command
+
+    run "$TEMP_SCRIPT" --self-update
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Successfully updated to v99.99.99" ]]
+
+    unset -f curl command
+    rm -f "$TEMP_SCRIPT"
+}
+
+# Test --clean with specific version filter
+@test "cleans specific version of a provider" {
+    PLUGIN_BASE="${TEST_TEMP_DIR}/.terraform.d/plugins"
+    mkdir -p "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0/darwin_amd64"
+    mkdir -p "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v2.0.0/darwin_amd64"
+    touch "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0/darwin_amd64/terraform-provider-corner_v1.0.0"
+    touch "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v2.0.0/darwin_amd64/terraform-provider-corner_v2.0.0"
+
+    HOME="$TEST_TEMP_DIR"
+    export HOME
+
+    run "$SCRIPT_PATH" --clean corner v1.0.0 --force
+    [ "$status" -eq 0 ]
+    [[ "${output}" =~ "Removed:" ]]
+    [ ! -d "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v1.0.0" ]
+    [ -d "${PLUGIN_BASE}/registry.terraform.io/hashicorp/corner/v2.0.0" ]
+}

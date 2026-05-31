@@ -1,5 +1,13 @@
-# ...existing content...
-# Test related
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Editor artifacts
+*.swp
+*.swo
+*~
+
+# Test artifacts
 *.tmp
 test/
 .bats/

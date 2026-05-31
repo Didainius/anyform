@@ -11,7 +11,7 @@ IS_PR=false
 PR_NUMBER=""
 
 # Version
-VERSION="v0.12.0"
+VERSION="v1.0.0"
 
 # Initialize flag variables
 PRINT_CONFIG=false
@@ -192,8 +192,6 @@ self_update() {
     echo "Updating from $VERSION to $latest_version..."
     # Create a temporary file for the download
     temp_file=$(mktemp)
-    # Ensure temp_file is removed on exit or error during this function
-    trap 'rm -f "$temp_file"' RETURN INT TERM
 
     if curl -L "https://github.com/Didainius/anyform/releases/latest/download/anyform" -o "$temp_file"; then
         chmod +x "$temp_file"
@@ -202,15 +200,15 @@ self_update() {
             # Set proper permissions (readable and executable by all, writable only by owner)
             chmod 755 "$current_script"
             echo "Successfully updated to $latest_version"
-            # Untrap the temporary file as it's been moved
-            trap - RETURN INT TERM
         else
-            # mv failed, temp_file still exists and will be removed by trap
+            # mv failed, clean up temp_file
+            rm -f "$temp_file"
             print_error "Failed to move updated script to $current_script"
             exit 1
         fi
     else
-        # curl failed, temp_file still exists and will be removed by trap
+        # curl failed, clean up temp_file
+        rm -f "$temp_file"
         print_error "Failed to download update"
         exit 1
     fi
